@@ -1,0 +1,46 @@
+```{r}
+# 今回は複数のチャートを「やや」複雑なレイアウトで1枚にまとめる方法を実演します。
+
+pkgs <- c('gridExtra','dplyr','ggplot2')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# 始めにサンプルとする4つのチャートを作成します。
+
+glist <- list()
+glist[[1]] <- ggpubr::gghistogram(rnorm(n = 100),fill = 'orange') + theme_minimal() + labs(title = 1) + theme(plot.title = element_text(size = 50))
+glist[[2]] <- ggplot() + geom_line(mapping = aes(x = seq(50),y = cumsum(rnorm(50))),size = 2,color = 'red') + theme_minimal() + labs(title = 2) + theme(plot.title = element_text(size = 50))
+glist[[3]] <- ggplot() + geom_bar(mapping = aes(x = seq(50),y = rnorm(50)),stat = 'identity',fill = 'green') + theme_minimal() + labs(title = 3) + theme(plot.title = element_text(size = 50))
+glist[[4]] <- ggplot() + geom_bar(mapping = aes(x = seq(50),y = rnorm(50)),stat = 'identity',fill = 'blue') + theme_minimal() + coord_flip() + labs(title = 4) + theme(plot.title = element_text(size = 50))
+
+# 作成したチャートを確認します。
+
+sapply(seq(glist),function(x){print(glist[[x]]);Sys.sleep(3)})
+
+# 込み入ったレイアウトの作成にはarrangeGrob {gridExtra}の引数layout_matrixを利用します。
+
+layout <- rbind(c(1,2,3),c(1,4,4))
+layout
+arrangeGrob(grobs = glist,ncol = 3,nrow = 2,layout_matrix = layout,widths = c(1,1,1),heights = c(1,1)) %>% ggpubr::as_ggplot()
+
+layout <- rbind(c(1,1,1),c(2,3,4))
+layout
+arrangeGrob(grobs = glist,ncol = 3,nrow = 2,layout_matrix = layout,widths = c(1,1,1),heights = c(1,1)) %>% ggpubr::as_ggplot()
+
+layout <- rbind(c(1,2,4),c(1,3,4))
+layout
+arrangeGrob(grobs = glist,ncol = 3,nrow = 2,layout_matrix = layout,widths = c(1,1,1),heights = c(1,1)) %>% ggpubr::as_ggplot()
+
+# 列と行の幅は引数widthsとheightsで指定します。
+
+layout <- rbind(c(1,2),c(1,3),c(1,4))
+layout
+widths <- c(1,0.5)
+heights <- c(1,1,0.5)
+arrangeGrob(grobs = glist,ncol = 2,nrow = 3,layout_matrix = layout,widths = widths,heights = heights) %>% ggpubr::as_ggplot()
+
+# 2列目は1列目の幅の半分。3行目の高さはその他の行の半分。
+
+# 以上です。今回は複数のチャートを「やや」複雑なレイアウトで1枚にまとめる方法を実演しました。ご視聴ありがとうございました。
+```
