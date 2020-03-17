@@ -1,0 +1,63 @@
+```{r}
+# https://youtu.be/8LdERKnmrvw
+
+# 今回はRを利用してアニメーション画像を作成する方法を実演します。
+# なおアニメーション画像作成のために「ImageMagick」(http://www.imagemagick.org/) がインストールされている事を前提とします。
+# http://rforpublichealth.blogspot.com/2014/12/animations-and-gifs-using-ggplot2.html
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('animation','ggplot2','dplyr','scales')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# アニメーションのサンプルは日次の日経平均株価終値を利用します。
+
+sampledf <- tail(nikkeidaily,40)
+head(sampledf)
+tail(sampledf)
+colnames(sampledf)[2] <- 'Value'
+tail(sampledf)
+sampledf$Date %>% class()
+sampledf$Value %>% class()
+sampledf$Date %>% range()
+
+# 2020年1月17日から2020年3月16日までの株価を利用します。
+
+# 作成するアニメーション画像のファイル名を設定。
+
+gifname <- 'nikkeinightmare.gif'
+
+# アニメーション画像の出力ディレクトリを指定。
+
+setwd(dir = 'D:/tmpimg')
+getwd()
+
+# 始めに日経平均株価の時系列チャートを出力する関数を作成します。
+
+fun_plot <- function(df,rrr){
+  data <- head(df,rrr)
+  daterange <- data$Date %>% range() %>% paste0(collapse = '~')
+  data$diff <-  c('*',data$Value %>% diff() %>% round(2))
+  print(ggplot(data = data,mapping = aes(x = Date,y = Value,group = 1)) + geom_line(size = 0.5) + geom_point(size = 4) + scale_x_date(limits = c(df$Date %>% head(1),df$Date %>% tail(1)),breaks = pretty_breaks(n = 4),labels = scales::date_format(format = '%y年%m月%d日')) + ylim(c(df$Value %>% min(),df$Value %>% max())) + theme(axis.text = element_text(size = 30),axis.title = element_blank(),plot.title = element_text(size = 30)) + labs(title = paste0('日経平均株価終値の時系列推移\n',daterange,'\n前営業日比(',tail(data$Date,1),'):',tail(data$diff,1))))
+}
+fun_plot(df = sampledf,rrr = nrow(sampledf)/4)
+fun_plot(df = sampledf,rrr = nrow(sampledf)/2)
+fun_plot(df = sampledf,rrr = 1)
+
+# 次に連続して画像を出力する関数を作成します。
+
+fun_expression <- function(df,rrr,time = 1){
+  lapply(X = seq(rrr),function(x){fun_plot(df = df,rrr = x);Sys.sleep(time = time)})
+}
+
+# 参考として1月17日からの5営業日までの画像を連続出力。
+fun_expression(df = sampledf,rrr = 5)
+
+# 最後にパッケージanimationの関数saveGIFを利用してアニメーションを作成します。
+
+animation::saveGIF(expr = fun_expression(df = sampledf,rrr = nrow(sampledf),time = 0),convert = 'magick',movie.name = gifname,interval = 0.2,ani.width = 1200,ani.height = 800)
+
+# 以上です。今回はRでアニメーション画像を作成する方法を実演しました。ご視聴ありがとうございました。
+```
