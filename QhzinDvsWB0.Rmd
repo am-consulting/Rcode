@@ -1,5 +1,6 @@
 ```{r}
 # https://youtu.be/QhzinDvsWB0
+
 # 今回は相互相関関数(Cross-Correlation Function)を手作業で算出する方法を実演します。
 
 version$version.string
