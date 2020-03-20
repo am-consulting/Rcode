@@ -1,5 +1,6 @@
 ```{r}
 # https://youtu.be/fWpyr3dH594
+
 # 今回はRを利用した共和分検定(ヨハンセンの手順)を実演します。
 # https://www.quantstart.com/articles/Johansen-Test-for-Cointegrating-Time-Series-Analysis-in-R/
 # http://user.keio.ac.jp/~nagakura/R/R_cointegration.pdf
