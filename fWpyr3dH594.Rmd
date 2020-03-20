@@ -1,0 +1,130 @@
+```{r}
+# https://youtu.be/fWpyr3dH594
+# 今回はRを利用した共和分検定(ヨハンセンの手順)を実演します。
+# https://www.quantstart.com/articles/Johansen-Test-for-Cointegrating-Time-Series-Analysis-in-R/
+# http://user.keio.ac.jp/~nagakura/R/R_cointegration.pdf
+# https://cran.r-project.org/web/packages/urca/urca.pdf
+# https://hermes-ir.lib.hit-u.ac.jp/rs/bitstream/10086/17664/1/0100904001.pdf
+# http://www2.econ.osaka-u.ac.jp/~tanizaki/class/2005/econome.grad/0709/coint.pdf
+
+# 始めに必要なパッケージを読み込みます。
+
+pkgs <- c('dplyr','CADFtest','ggplot2','forecast','gridExtra','urca')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# ここでは6つのパッケージを読み込みましたが、共和分検定に必要なパッケージは最後の'urca'です。
+
+# 検定の設計は、
+# 1)2本の時系列データxとy(y1、y2)の間の共和分検定(y ~ x)。
+# 2)x、y共に1次の和分過程I(1)。
+# 3)共和分検定(ヨハンセンの手順)はパッケージurcaの関数ca.joを利用。
+# 4)検定の有意水準は5%。
+# とします。
+
+# 最初に幾つか関数を作成します。
+# 正規分布からのベクトルを抽出する関数
+fun_rnorm <- function(n = 50,mean = 0,sd = 1,seed = 20200317){
+  set.seed(seed = seed)
+  rnorm(n = n,mean = mean,sd = sd) %>% return()
+}
+
+# 時系列チャートを作成する関数
+fun_plot <- function(N,tsdata,maintitle){
+  g <- ggplot(mapping = aes(x = N,y = tsdata)) + geom_line(size = 0.5) + geom_point(size = 4) + theme(axis.title = element_text(size = 20),axis.text = element_text(size = 20),plot.title = element_text(size = 25)) + labs(title = maintitle)
+  return(g)
+}
+
+# 原系列と1次階差系列の時系列チャートと単位根検定のp値を求める関数
+fun_adf <- function(tsdata,maintitle0){
+  gglist <- list()
+  # 原系列
+  raw_ts <- tsdata
+  raw_pvalue <- CADFtest(model = raw_ts, max.lag.y = 2, type = "trend")$p.value %>% round(3)
+  raw_maintitle <- paste0(maintitle0,'\nADF検定 p-value:',raw_pvalue)
+  raw_N <- seq(raw_ts)
+  gglist[[1]] <- fun_plot(N = raw_N,tsdata = tsdata,maintitle = raw_maintitle)
+  # 1次階差系列
+  diff_ts <- diff(tsdata)
+  diff_pvalue <- CADFtest(model = diff_ts, max.lag.y = 2, type = "trend")$p.value %>% round(3)
+  diff_maintitle <- paste0(maintitle0,'の1次階差系列\nADF検定 p-value:',diff_pvalue)
+  diff_N <- seq(diff_ts)
+  gglist[[2]] <- fun_plot(N = diff_N,tsdata = diff_ts,maintitle = diff_maintitle)
+  # プロット
+  gg0 <- arrangeGrob(grobs = gglist,ncol = 1)
+  gg1 <- ggpubr::as_ggplot(gg0)
+  print(gg1)
+}
+
+# 始めに系列xを作成します。
+x <- cumsum(fun_rnorm(seed = 2020032001))
+x
+fun_adf(tsdata = x,maintitle0 = 'x')
+
+# x原系列の非定常は棄却できず、1次階差(1階差分)では棄却。
+# よってxは1次の和分過程(I(1))。
+
+# 次に残差項を正規分布からの抽出とした上でxとの線形結合系列y1を作成します。
+# 始めに残差を作成します。
+resid <- fun_rnorm(sd = 4,seed = 2020032002)
+resid
+fun_adf(tsdata = resid,maintitle0 = '残差(撹乱項)')
+# 作成した残差の非定常は棄却されます。
+
+# 係数を5、切片は2として線形結合します。*設定した係数、切片に意味はありません。
+y1 <- 5*x + 2 + resid
+y1
+fun_adf(tsdata = y1,maintitle0 = 'y1')
+# y1原系列の非定常は棄却できず、1次階差では棄却。
+# よってy1は1次の和分過程(I(1))。
+
+# 最後に残差項を1次の和分過程とした上でxとの線形結合系列y2を作成します。
+# 始めに残差を作成します。
+resid <- cumsum(fun_rnorm(sd = 4,seed = 2020032003))
+resid
+fun_adf(tsdata = resid,maintitle0 = '残差(撹乱項)')
+# 作成した残差の原系列は非定常が棄却できず、1次階差は棄却されます。
+# よって残差は1次の和分過程。
+
+# 係数を5、切片は2として線形結合します。*設定した係数、切片に意味はありません。
+y2 <- 5*x + 2 + resid
+y2
+fun_adf(tsdata = y2,maintitle0 = 'y2')
+# y2原系列の非定常は棄却できず、1次階差では棄却。
+# よってy2は1次の和分過程(I(1))。
+
+# xとy(y1、y2)の散布図、線形回帰、残差の時系列プロット、残差の自己相関関数、そして共和分検定を実施する関数を作成します。
+fun_cointeg <- function(x,y){
+  cat("\014")
+  # 散布図
+  (ggplot(mapping = aes(x = x,y = y)) + geom_point(size = 4) + theme(axis.title = element_text(size = 20),axis.text = element_text(size = 20)) + geom_smooth(formula = y ~ x,method = 'lm')) %>% print()
+  # 線形回帰
+  lm(y~x) %>% summary() %>% print()
+  # 残差(時系列)
+  resid <- lm(y~x) %>% summary() %>% .$resid
+  (ggplot(mapping = aes(x = seq(resid),y = resid)) + geom_line(size = 0.5) + geom_point(size = 3) + theme(axis.title = element_text(size = 20),axis.text = element_text(size = 20)) + geom_hline(yintercept = 0)) %>% print()
+  # 残差(ACF)
+  (ggplot2::autoplot(forecast::Acf(x = resid,plot = F),size = 10) + theme(axis.title = element_text(size = 20),axis.text = element_text(size = 20))) %>% print()
+  # 共和分検定
+  # 
+  urca::ca.jo(x = cbind(y,x),type = 'trace',spec = 'transitory',K = 2) %>% summary()
+}
+
+# 始めにx、y共に1次の和分過程I(1)かつ線形結合の残差は定常I(0)の場合。
+# 「共和分関係無し」が棄却されるはずです。
+fun_cointeg(x = x,y = y1)
+# チャートは散布図、残差の時系列プロット、そして残差の自己相関関数です。
+# xとy(y1)共に単位根過程で線形回帰に有意な係数が現れています。
+# 共和分関係無し(r = 0)の場合の5%棄却限界値は17.95、検定統計量は28.24。
+# よって「共和分関係無し」は棄却。
+
+# 次にx、y(y2)共に1次の和分過程I(1)かつ線形結合の残差も1次の和分過程I(1)の場合。
+# 「共和分関係無し」は棄却されないはずです。
+fun_cointeg(x = x,y = y2)
+# こちらもxとy(y2)共に単位根過程で線形回帰に有意な係数が現れています。
+# 共和分関係無し(r = 0)の場合の5%棄却限界値は17.95、検定統計量は8.00。
+# よって「共和分関係無し」は棄却できず。
+
+# 以上です。今回はRを利用した共和分検定(ヨハンセンの手順)を実演しました。ご視聴ありがとうございました。
+```
