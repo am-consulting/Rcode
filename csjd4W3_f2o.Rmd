@@ -1,0 +1,59 @@
+```{r}
+# https://youtu.be/csjd4W3_f2o
+
+# 今回はt検定信頼区間のシミュレーションを実演します。
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('ggplot2','dplyr')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# シミュレーションの関数を作成します。
+# 関数は次の通り6つのパートから構成されています。
+# Part1 正規分布に従う母集団を作成し、その母平均を算出。
+# Part2 指定回数分(trials)、母集団(population)からサンプル(samplesize)を抽出しt検定を実施。
+# Part3 1列目を試行番号、2列目を推定量、3列目を信頼区間下限、4列目を信頼区間上限としたデータフレームを作成。
+# Part4 下限が母平均を上回っている又は上限が母平均を下回っている場合を"out"、信頼区間に収まっている場合を"in"とし、  Part3で作成したデータフレームに列を追加。
+# Part5 結果をプロット
+# Part6 例として試行番号1のt検定結果および信頼区間に収まらなかった試行を出力。
+fun_ttest <- function(seed,populationsize,normmean,normsd,trials,samplesize,cl){
+  # Part1
+  set.seed(seed)
+  population <- rnorm(n = populationsize,mean = normmean,sd = normsd)
+  populationmean <- mean(population)
+  # Part2
+  resultlist <- lapply(X = seq(trials),FUN = function(x)t.test(x = base::sample(population,samplesize,replace = F),mu = populationmean, conf.level = cl,alternative = 'two.sided'))
+  # Part3
+  resultdf <- data.frame(seq(trials),Reduce(function(x,y)rbind(x,y),lapply(X = resultlist,function(x)c(x$estimate,x$conf.int[1],x$conf.int[2]))),row.names = NULL)
+  colnames(resultdf) <- c('traialno','mean','lower','upper')
+  # Part4
+  resultdf$outcome <- ifelse(populationmean < resultdf$lower | resultdf$upper < mean(population),'out','in')
+  # Part5
+  (ggplot(resultdf,aes(x = traialno,y = mean,col = outcome)) + geom_point(size = 1) + geom_errorbar(aes(ymax = upper,ymin = lower,col = outcome)) + geom_hline(yintercept = populationmean,linetype = 2) + scale_color_manual(values = c('out' = 'red','in' = 'blue')) + theme(legend.title = element_blank(),legend.text = element_text(size = 20),axis.title.x = element_blank(),axis.title.y = element_blank(),axis.text = element_text(size = 20)) + annotate(geom = 'text',x = 0,y = populationmean,label = 'Population mean\n',vjust = 0.5,hjust = 0,size = 10)) %>% print()
+  cat("\014")
+  # Part6
+  print('Trial No.1')
+  print(resultlist[[1]])
+  {resultdf$outcome=='out'} %>% resultdf[.,] %>% print()
+}
+
+# それでは母集団のサイズを1000万、正規分布の平均を100、正規分布の標準偏差を10、試行回数を100、サンプルサイズを20、信頼水準を95%として試行してみましょう。
+
+fun_ttest(seed = 2020032301,populationsize = 10^7,normmean = 100,normsd = 10,trials = 100,samplesize = 20,cl = 0.95)
+# 100回の試行の内、信頼区間に母平均が収まらなかったのは8回。5回以上収まりませんでした。
+
+# サンプルサイズのみを40に変えてみます。
+fun_ttest(seed = 2020032302,populationsize = 10^7,normmean = 100,normsd = 10,trials = 100,samplesize = 40,cl = 0.95)
+# 100回の試行の内、信頼区間に母平均が収まらなかったのは5回。95回収まりました。
+
+# サンプルサイズのみを10に変えてみます。
+fun_ttest(seed = 2020032303,populationsize = 10^7,normmean = 100,normsd = 10,trials = 100,samplesize = 10,cl = 0.95)
+# 100回の試行の内、信頼区間に母平均が収まらなかったのは1回。99回収まりました。
+
+# 最後にサンプルサイズのみを100に変えてみます。
+fun_ttest(seed = 2020032303,populationsize = 10^7,normmean = 100,normsd = 10,trials = 100,samplesize = 100,cl = 0.95)
+# 100回の試行の内、信頼区間に母平均が収まらなかったのは5回。95回収まりました。
+# 以上です。t検定信頼区間のシミュレーションを実演しました。ご視聴ありがとうございました。
+```

@@ -1,0 +1,64 @@
+```{r}
+# https://youtu.be/lkkjxHBH0FE
+
+# 今回はggplotで作成したプロットのオブジェクトを抽出する方法を実演します。
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('ggplot2','dplyr')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# 始めはヒストグラムを作成し、そのオブジェクトを抽出します。
+
+set.seed(2020032101)
+x <- rnorm(n = 100)
+g <- ggplot(mapping = aes(x = x)) + geom_histogram(binwidth = 0.2,color='red',fill = 'white',closed = 'left') + scale_y_continuous(breaks = seq(15), labels = seq(15))
+g
+
+# こちらのヒストグラムのオブジェクトを抽出します。
+# オブジェクト抽出にはパッケージggplot2の関数ggplot_buildを利用します。
+
+gbuild <- ggplot_build(plot = g)
+
+# 抽出したオブジェクト、ここではgbuildはdata、layout、plotの3つのリストから構成されています。
+# 順番に確認します。
+
+cat("\014")
+gbuild$data
+
+# dataにはヒストグラムの頻度(count)や階級幅(xmin,xmax),ビンの色(color,fill)等が格納されています。
+
+gbuild$layout
+
+# layoutにはプロットのレイアウト構造が格納されています。
+
+gbuild$plot
+
+# plotはヒストグラムがプロットされます。
+
+# もう一つ今度は信頼区間付き回帰直線を表示した散布図から抽出してみます。
+
+set.seed(2020032102)
+x <- rnorm(n = 100)
+y <- 2*x + 4 + rnorm(n = 100)
+g <- ggplot(mapping = aes(x = x,y = y)) + geom_point(size = 2) + geom_smooth(method = 'lm') + geom_hline(yintercept = 0) + geom_vline(xintercept = 0)
+g
+
+# こちらの散布図から抽出します。
+
+gbuild <- ggplot_build(plot = g)
+cat("\014")
+gbuild$data
+
+# data[[1]]では各ポイントの座標(x,y)が確認できます。
+# data[[2]]では回帰直線の座標(x,y)と信頼区間の座標(ymin,ymax)が確認できます。
+# data[[3]]はx軸、y軸に引いた垂線、水平線の位置が確認できます。
+
+gbuild$layout
+gbuild$plot
+
+# layoutとplotはヒストグラムと同様です。
+# 以上です。今回はggplotで作成したプロットのオブジェクトを抽出する方法を実演しました。ご視聴ありがとうございました。
+```

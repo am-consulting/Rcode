@@ -1,0 +1,65 @@
+```{r}
+# https://youtu.be/bvRN9jvUUWg
+
+# 今回はRで利用できる3つの正規性検定関数、その関数毎の結果を比較します。
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('dplyr','tseries')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# 比較の設計は、
+# 1 サンプルサイズをそれぞれ1000とする正規分布、ベータ分布に従う乱数ベクトルを計2つ作成。
+# 2 それぞれのサンプルをshapiro.test {stats}(シャピロ・ウィルク検定)、jarque.bera.test {tseries}(ジャック・ベラ検定)、ks.test {stats}(コルモゴロフ・スミルノフ検定)の3つの関数で正規性を検定し結果のp値を抽出。3つの関数のH0はいずれも「正規分布に従う」。
+# 3 上記1から2を100回繰り返し。
+
+fun_compare <- function(n = 1000,shape1,shape2){
+  curve(expr = dbeta(x,shape1,shape2),main = paste0('beta分布.shape1=',shape1,',shape2=',shape2))
+  normdf <- betadf <- data.frame()
+  for(iii in seq(100)){
+    set.seed(iii)
+    normsample <- rnorm(n = n)
+    betasample <- rbeta(n = n,shape1 = shape1,shape2 = shape2)
+    normdf[iii,1] <- iii
+    normdf[iii,2] <- shapiro.test(x = normsample)$p.value
+    normdf[iii,3] <- jarque.bera.test(x = normsample)$p.value
+    normdf[iii,4] <- ks.test(x = normsample,y = 'pnorm',mean = mean(normsample),sd = sd(normsample))$p.value
+    betadf[iii,1] <- iii
+    betadf[iii,2] <- shapiro.test(x = betasample)$p.value
+    betadf[iii,3] <- jarque.bera.test(x = betasample)$p.value
+    betadf[iii,4] <- ks.test(x = betasample,y = 'pnorm',mean = mean(betasample),sd = sd(betasample))$p.value
+  }
+  colnames(normdf) <- colnames(betadf) <- c('N','shapiro','jarque.bera','ks')
+  return(list('normdf' = normdf,'betadf' = betadf))
+}
+
+obj <- fun_compare(shape1 = 2,shape2 = 5)
+# 正規分布に従う乱数ベクトル(n=1000)の正規性検定結果(試行回数100回)、p値は次の通り。
+normdf <- obj$normdf
+cat("\014")
+normdf
+# 左からshapiro検定、jarque.bera検定、ks検定
+
+# 続いてベータ分布(形状パラメータは上記)に従う乱数ベクトル(n=1000)の正規性検定結果(試行回数100回)、p値は次の通り。
+betadf <- obj$betadf
+cat("\014")
+betadf
+
+# 正規分布に従うサンプルのうちp値が0.05を下回る、H0帰無仮説(正規分布に従う)が棄却された回数は100回の試行の内、
+sapply(X = 2:4,FUN = function(x){normdf[,x] %>% {.<0.05}} %>% sum())
+# shapiro検定で4回、jarque.bera検定も4回、ks検定ではゼロでした。
+
+# ベータ分布に従うサンプルでp値が0.05を上回る、H0帰無仮説(正規分布に従う)が棄却されない回数は100回の試行の内、
+sapply(X = 2:4,FUN = function(x){betadf[,x] %>% {.>=0.05}} %>% sum())
+# 3種いずれの検定でもゼロでした。
+
+# ベータ分布の形状パラメータをshape1、shape2共に5とした場合では、
+obj <- fun_compare(shape1 = 5,shape2 = 5)
+betadf <- obj$betadf
+betadf
+sapply(X = 2:4,FUN = function(x){betadf[,x] %>% {.>=0.05}} %>% sum())
+# shapiro検定で9回、jarque.bera検定も9回、ks検定では98回帰無仮説(正規分布に従う)が棄却されませんでした。
+# 以上です。今回はRで利用できる3つの正規性検定関数、その関数毎の結果を比較しました。ご視聴ありがとうございました。
+```

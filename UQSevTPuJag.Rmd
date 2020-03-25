@@ -1,0 +1,89 @@
+```{r}
+# https://youtu.be/UQSevTPuJag
+
+# 今回はタービン･ワトソン検定の検定統計量(d)を手作業で算出します。
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('dplyr','lmtest','ggplot2','CADFtest','tidyr')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# 3本の時系列データ(y1,y2a,y2b)を作成します。
+# それぞれのサンプルサイズは50とします。
+n <- 50
+t <- seq(n)
+
+# y1は正規分布の累積和。
+set.seed(2020032401)
+y1 <- cumsum(rnorm(n))
+plot(x = t,y = y1,type = 'o')
+
+# y2aは正規分布に従う残差としたy1との線形結合。
+# 係数、切片はそれぞれ1.5、2としますがその数値に意味はありません。
+set.seed(2020032402)
+e <- rnorm(n)
+y2a <- 1.5*y1 + 2 + e
+plot(x = t,y = y2a,type = 'o')
+# 残差の偏自己相関を確認します。
+forecast::Pacf(x = e,plot = T)$acf
+# 残差に有意な自己相関は見られません。
+
+# y2bは正規分布の累積和を残差としたy1との線形結合。
+# y2a同様、係数、切片はそれぞれ1.5、2。その数値に意味はありません。
+set.seed(2020032403)
+e <- cumsum(rnorm(n))
+y2b <- 1.5*y1 + 2 + e
+plot(x = t,y = y2b,type = 'o')
+# 残差の偏自己相関を確認します。
+forecast::Pacf(x = e,plot = T)$acf
+# 残差はラグ1に有意な正の相関が見られます。
+
+# 3系列をデータフレーム(tidy data)にまとめます。
+dataf <- data.frame(t,y1,y2a,y2b) %>% gather(key = 'key',value = 'value',colnames(.)[-1])
+
+ggplot(data = dataf,mapping = aes(x = t,y = value,color = key)) + geom_line(size = 2) + theme(legend.position = 'top',legend.text = element_text(size = 20))
+
+# 3系列の定常/非定常を検定します。
+
+lapply(c('y1','y2a','y2b'),function(x){CADFtest(dname = x,model = eval(parse(text = x)),max.lag.y = 2, type = "trend")})
+
+# y1、y2a、y2bはいずれも非定常が棄却出来ない時系列データですが、今回はタービン･ワトソン検定の検定統計量算出を目的としますので無視して相関を取ります。
+```
+
+$$
+d = \frac{\Sigma_{t=2}^{T}\left(e_t-e_{t-1}\right)^2}{\Sigma_{t=1}^{T}e_t^2}
+$$
+
+```{r}
+# e:線形回帰の残差
+
+# y1と「y2a」の線形回帰の残差に系列相関有るや無しやを確認します。
+# 「H0:系列相関無し」は棄却されないはずです。
+
+lmresult <- lm(data = dataf,formula = y2a ~ y1)
+lmresult %>% summary()
+# 線形回帰の結果です。
+# 検定統計量dを求めます。
+e <- lmresult %>% .$resid
+d <- ((e %>% tail(-1))-(e %>% head(-1)))^2 %>% sum() / (e^2 %>% sum())
+cat("\014")
+d
+# p値は関数dwtest {lmtest}の助けを借ります。
+dwtest(formula = y2a ~ y1,data = dataf)
+# 同じ検定統計量が得られています。
+# 「残差に1次の系列相関無し」は棄却されず。
+
+# y1と「y2b」の線形回帰の残差に系列相関有るや無しやを確認します。
+# 「H0:系列相関無し」は棄却されるはずです。
+e <- lm(data = dataf,formula = y2b ~ y1) %>% .$resid
+d <- ((e %>% tail(-1))-(e %>% head(-1)))^2 %>% sum() / (e^2 %>% sum())
+cat("\014")
+d
+dwtest(formula = y2b ~ y1,data = dataf)
+# 同じ検定統計量が得られています。
+# 「残差に1次の系列相関無し」は棄却。
+
+# 以上です。今回はタービン･ワトソン検定の検定統計量を手作業で算出しました。ご視聴ありがとうございました。
+```
