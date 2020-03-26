@@ -1,0 +1,129 @@
+```{r}
+# https://youtu.be/pyTRIGbDygU
+
+# 今回はゴールドフェルド=クォント検定の検定統計量とp値を手作業で算出します。
+# https://cran.r-project.org/web/packages/lmtest/lmtest.pdf
+# https://rpubs.com/arda_yalcin/546193
+# http://www.econ.nagoya-cu.ac.jp/~kamiyama/siryou/regress/EXCELreg.html
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('dplyr','tidyr','ggplot2')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# 3本の時系列データ(y1,y2a,y2b)を作成します。
+# それぞれのサンプルサイズは90とします。
+
+n <- 90
+t <- seq(n)
+
+# y1は正規分布に従う乱数の累積和。
+set.seed(2020032501)
+y1 <- cumsum(rnorm(n))
+plot(x = t,y = y1,type = 'o')
+
+# y2aは「標準偏差を1とする正規分布に従う残差」とy1との線形結合。
+set.seed(2020032502)
+e <- rnorm(n = n,mean = 0,sd = 1)
+# 残差の様子
+plot(x = t,y = e,type = 'o')
+# 係数は1.5、切片を2として線形結合します。なお1.5と2に意味はありません。
+y2a <- 1.5*y1 + 2 + e
+plot(x = t,y = y2a,type = 'o')
+# y1とy2aとの線形回帰の結果を確認します。
+lm(formula = y2a~y1) %>% summary()
+
+# y2bは「時系列を3分の1ずつ前半、中盤、後半の3つに分割し、それぞれの標準偏差を下記の通りに変化させた残差」とy1との線形結合。
+sd1 <- 1;sd2 <- 2.5;sd3 <- 5
+set.seed(2020032503)
+e <- c(rnorm(n/3,sd = sd1),rnorm(n/3,sd = sd2),rnorm(n/3,sd = sd3))
+# 残差の様子。
+plot(x = t,y = e,type = 'o')
+# 分散が変化しています。
+# y1aと同様に係数は1.5、切片を2として線形結合します。なおこちらも1.5と2に意味はありません。
+y2b <- 1.5*y1 + 2 + e
+plot(x = t,y = y2b,type = 'o')
+# 線形回帰の結果を確認します。
+lm(formula = y2b~y1) %>% summary()
+# 一応、有意な係数と切片が現れますが残差の分散は不均一です。
+lm(formula = y2b~y1) %>% summary() %>% .$resid %>% plot(type='o')
+
+# 3系列ををまとめて確認します。
+dataf <- data.frame(t,y1,y2a,y2b) %>% gather(key = 'key',value = 'value',colnames(.)[-1])
+ggplot(data = dataf,mapping = aes(x = t,y = value,color = key)) + geom_line(size = 1) + theme(legend.position = 'top',legend.text = element_text(size = 20))
+
+# 今回の目的は関数gqtest {lmtest}を利用して出力される検定統計量GQとp値の手作業による算出です。
+
+# 同関数の結果を確認します。
+# 最初にy1とy2aの線形回帰の残差です。
+# 分散均一は棄却されないはずです。
+lmtest::gqtest(formula = y2a~y1,point = 0.5,order.by = NULL,fraction = 0,alternative = 'two')
+# サンプルを丁度半分に分け、説明変数で並べ替えはせず、中間のデータも除外しない場合となります。
+# y1とy2aの線形回帰の残差について「H0:残差の分散は均一」は棄却されません(有意水準5%)。
+
+# 次にy1とy2bの線形回帰の残差を確認します。
+# 分散均一は棄却されるはずです。
+lmtest::gqtest(formula = y2b~y1,point = 0.5,order.by = NULL,fraction = 0,alternative = 'two')
+# こちらもサンプルを丁度半分に分け、説明変数で並べ替えはせず、中間のデータも除外しない場合となります。
+# y1とy2bの線形回帰の残差について「H0:残差の分散は均一」は棄却されます(有意水準5%)。
+
+# それではy1とy2bの線形回帰残差の検定統計量とp値を手作業で求めます。
+
+# 検定統計量とp値を求める関数を作成します。
+f_gq <- function(obj,exp,k,n1,n2){
+  # 回帰平方和(Regression Sum of Squares)を求めます。
+  rss1 <- lm(head(obj,n1)~head(exp,n1)) %>% summary() %>% .$resid %>% .^2 %>% sum()
+  rss2 <- lm(tail(obj,n2)~tail(exp,n2)) %>% summary() %>% .$resid %>% .^2 %>% sum()
+  # 検定統計量
+  gq <- {rss2/(n2-k)}/{rss1/(n1-k)}
+  # 自由度
+  df1 <- n2-k
+  df2 <- n1-k
+  # p値(F分布)
+  pvalue <- 2*min(pf(gq,df1,df2,lower.tail = T),pf(gq,df1,df2,lower.tail = F))
+  return(list(gq=gq,pvalue=pvalue))
+}
+
+# 始めは「時系列データを丁度半分に分け、説明変数で並べ替えはせず、中間のデータの除外無し」とた検定の場合です。
+cat("\014")
+k <- 2 # 説明変数×1、定数項
+n1 <- n2 <- n/2 
+n1;n2
+lmtest::gqtest(formula = y2b~y1,point = 0.5,order.by = NULL,fraction = 0,alternative = 'two')
+f_gq(obj = y2b,exp = y1,k = 2,n1 = 45,n2 = 45)
+# 同じ結果が得られています。
+
+# 次は「時系列データを前半20%分と後半80%分に分け、説明変数で並べ替えはせず、中間のデータの除外無し」とした検定の場合です。
+cat("\014")
+k <- 2 # 説明変数×1、定数項
+n1 <- n*0.2 
+n2 <- n*0.8
+n1;n2
+lmtest::gqtest(formula = y2b~y1,point = 0.2,fraction = 0,order.by = NULL,alternative = 'two')
+f_gq(obj = y2b,exp = y1,k = 2,n1 = 18,n2 = 72)
+# 同じ結果が得られています。
+
+# 次は「時系列データを前半20%分と後半80%分に分け、説明変数で並べ替えはせず、中間のデータ20組を除外」とした検定の場合です。
+cat("\014")
+k <- 2 # 説明変数×1、定数項
+n1 <- n*0.2-20/2 
+n2 <- n*0.8-20/2
+n1;n2
+lmtest::gqtest(formula = y2b~y1,point = 0.2,fraction = 20,order.by = NULL,alternative = 'two')
+f_gq(obj = y2b,exp = y1,k = 2,n1 = 8,n2 = 62)
+# 同じ結果が得られています。
+
+# 最後は「時系列データを前半20%分と後半80%分に分け、説明変数を昇順で並べ替え、中間のデータ20組を除外」とした検定の場合です。
+cat("\014")
+k <- 2 # 説明変数×1、定数項
+n1 <- n*0.2-20/2 
+n2 <- n*0.8-20/2
+n1;n2
+ordern <- order(y2b,decreasing = F)
+lmtest::gqtest(formula = y2b~y1,point = 0.2,fraction = 20,order.by = y2b,alternative = 'two')
+f_gq(obj = y2b[ordern],exp = y1[ordern],k = 2,n1 = 8,n2 = 62)
+# 同じ結果が得られています。
+# 以上です。ゴールドフェルド=クォント検定の検定統計量とp値を手作業で算出しました。ご視聴ありがとうございました。
+```
