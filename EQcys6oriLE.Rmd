@@ -1,0 +1,104 @@
+```{r}
+# https://youtu.be/EQcys6oriLE
+
+# 今回はRを利用して重回帰分析における多重共線性、その程度の指標となる分散拡大係数(variance inflation factor, VIF)を確認します。
+# http://www.sthda.com/english/articles/39-regression-model-diagnostics/160-multicollinearity-essentials-and-vif-in-r/
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+```
+
+$$
+y = a_1x_1+a_2x_2+a_3x_3+Const+N(0,1)
+$$
+
+```{r}
+# 重回帰分析のサンプルは次の通りとします。
+# サンプルサイズは30、定数項と説明変数(x1,x2,x3)の係数は下記。
+n <- 30
+const <- 5
+coeff <- c(1.5, -2, 4) # a1,a2,a3
+
+# x1を作成します。
+set.seed(2020032701)
+x1 <- rnorm(n = n);x1
+# x2を作成します。x1との線形結合とします。係数と定数項の数値に意味はありません。
+set.seed(2020032702)
+x2 <- 3*x1 + 3 + rnorm(n = n);x2
+# x3を作成します。
+set.seed(2020032703)
+x3 <- rnorm(n = n);x3
+# 説明変数を行列にして。
+X <- cbind(x1,x2,x3);X
+# yを作成します。
+y0 <- (X %*% coeff) %>% as.vector();y0
+set.seed(2020032704)
+y <- y0 + const + rnorm(n = n);y
+# (y0-(x1*coeff[1]+x2*coeff[2]+x3*coeff[3])) %>% unique()
+
+# 重相関分析を行います。
+formula <- y ~ x1 + x2 + x3
+formula
+lmresult <- lm(formula = formula)
+lmresult
+cat("\014")
+lmresult %>% jtools::summ(confint = T)
+const;coeff
+
+# 説明変数、定数項いずれも「一応」イコールゼロは有意に棄却され(5%)、サンプル作成に利用した係数も95%信頼区間に収まっていますが、x1とx2には有意な線形相関があります。
+
+lmresultx2x1 <- lm(x2~x1)
+lmresultx2x1 %>% jtools::summ(confint = T)
+plot(x1,x2)
+abline(lmresultx2x1,col = 'red')
+lmresultx2x1$residuals %>% pacf()
+
+# 分散拡大係数はパッケージcarの関数vifで確認できます。
+# 引数mod(method)にVIFを求める重相関分析の結果、ここではlmresultを指定します。
+# x1とx2には多重共線性が現れるはずです。
+
+cat("\014")
+car::vif(mod = lmresult)
+
+# x1、x2は共に10を超えています。
+# VIFの基準として10以上を問題にしているようです。https://www.heisei-u.ac.jp/ba/fukui/tips/tip006.pdf
+# つまりx1、x2の多重共線性が示唆されています。
+# これらVIFの値を手作業で算出します。
+# 関数を作成します。
+fun_vif <- function(formula){
+  # 対象とする説明変数を「その他の説明変数」で線形回帰し、その決定係数を求めます。
+  lmresult <- lm(formula = formula) %>% summary()
+  vif <- 1/(1-lmresult$r.squared)
+  # 同時に重相関係数も求めます。
+  r <- lmresult$r.squared %>% sqrt()
+  return(list(vif=vif,r=r))
+}
+
+# x1のVIF。x1を目的変数、x2、x3を説明変数とし線形回帰を取ります。
+formula <- x1 ~ x2 + x3
+fun_vif(formula = formula)
+# x1のVIFは16.03244。関数vif{car}の結果と同じです。
+# なお重相関係数は0.96。
+
+# x2のVIF
+formula <- x2 ~ x1 + x3
+fun_vif(formula = formula)
+# x2のVIFは15.41254。関数vif{car}の結果と同じです。
+# なお重相関係数はこちらも0.96。
+
+# 最後はx3のVIF
+formula <- x3 ~ x1 + x2
+fun_vif(formula = formula)
+# x3のVIFは1.179138。関数vif{car}の結果と同じです。
+# なお重相関係数は0.38。
+
+# VIFが10の場合の相関係数を最後に確認してみましょう。
+
+(1-1/10)^0.5
+
+# 重相関係数で見ますと約0.94に相当するようです。
+# 以上です。今回はRを利用して重回帰分析における多重共線性、分散拡大係数(variance inflation factor, VIF) を確認しました。ご視聴ありがとうございました。
+```

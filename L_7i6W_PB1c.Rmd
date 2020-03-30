@@ -1,0 +1,68 @@
+```{r}
+# https://youtu.be/L_7i6W_PB1c
+
+# 今回はRを利用した重回帰分析を実演します。
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# サンプルデータは次の通りとします。
+# 説明変数をx1、x2、x3とし目的変数はy。
+# サンプルサイズ、定数項、係数は以下の通り。
+n <- 40
+const <- 5
+coeff <- c(0.5, -2, 4) # a1,a2,a3
+```
+
+$$
+y = a_1x_1+a_2x_2+a_3x_3+Const+N(0,1)
+$$
+
+```{r}
+# サンプルを作成します。
+# x1
+set.seed(2020032701)
+x1 <- rnorm(n = n);x1
+# x2
+set.seed(2020032702)
+x2 <- rnorm(n = n);x2
+# x3
+set.seed(2020032703)
+x3 <- rnorm(n = n);x3
+# 説明変数を行列にして
+X <- cbind(x1,x2,x3);X
+# yを作成
+y0 <- (X %*% coeff) %>% as.vector();y0
+set.seed(2020032704)
+y <- y0 + const + rnorm(n = n);y
+# (y0-(x1*coeff[1]+x2*coeff[2]+x3*coeff[3])) %>% unique()
+
+# それではx1、x2、x3の説明変数の係数と定数項を推定します。
+# 引数formulaには「y ~ x1 + x2 + x3」と表記し指定します。
+formula <- y ~ x1 + x2 + x3
+formula
+lmresult <- lm(formula = formula)
+cat("\014")
+lmresult 
+# 推定された係数と定数項が表示されます。
+# 結果を見やすくします。
+cat("\014")
+lmresult %>% jtools::summ(confint = T)
+const;coeff
+# 推定された各係数、定数項は有意(水準5%)にゼロを跨がず、作成に利用した係数、定数項も95%信頼区間に収まっています。
+
+# 次に定数項を持たないケースを求めてみます。
+# constを削ったベクトルyを作成します。
+set.seed(2020032705)
+y <- y0 + rnorm(n = n);y
+# 定数項を持たない場合はformulaの最後に-1を追記します。
+formula <- y ~ x1 + x2 + x3 -1
+formula
+lm(formula = formula) %>% jtools::summ(confint = T)
+coeff
+# こちらも推定された各係数は有意(水準5%)にゼロを跨がず、作成に利用した係数も95%信頼区間に収まっています
+# 以上です。今回はRを利用した重回帰分析を実演しました。ご視聴ありがとうございました。
+```
