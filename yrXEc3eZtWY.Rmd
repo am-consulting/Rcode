@@ -1,0 +1,57 @@
+```{r}
+# https://youtu.be/yrXEc3eZtWY
+
+# 今回はggplotで作成済みのチャートの一部を変更して再表示する方法を実演します。
+# https://stackoverflow.com/questions/48066550/plotp-and-plotggplot-gtableggplot-buildp-dont-seem-to-give-same-output
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('dplyr','ggplot2','grid')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# サンプルとしますggplotの散布図を作成します。
+set.seed(20200410)
+x <- rnorm(20)
+y <- rnorm(20)
+g <- ggplot(mapping = aes(x = x,y = y)) + geom_point(size = 4) + theme_minimal() + theme(text = element_text(size = 20))
+g
+
+# 始めに散布図のポイントサイズを現在の4から10に変更します。
+# 関数ggplot_build {ggplot2}でプロットのオブジェクトを取り出します。
+builddata <- ggplot_build(g)
+cat("\014")
+builddata
+
+# オブジェクトはdata、layoutそしてplotの3つのリストで構成されています。
+
+# ポイントサイズを変更するには$data[[1]]の、現在は4となっている、sizeを10に変更します。
+builddata$data[[1]]$size <- 10
+cat("\014")
+builddata
+
+# sizeが10に変更されています。
+
+# 次に関数ggplot_buildで取り出したオブジェクトを再びプロットするために関数ggplot_gtable {ggplot2}と関数grid.draw {grid}を利用します。
+
+tablegrob <- ggplot_gtable(builddata) 
+tablegrob
+grid.newpage()
+tablegrob %>% grid.draw()
+
+# ポイントサイズが10に変更された散布図が表示されました。
+
+# 最後にポイントの色を赤に、シェイプを三角形に、サイズを15に変更してみます。
+
+builddata <- ggplot_build(g)
+builddata$data[[1]]$colour <- 'red'
+builddata$data[[1]]$shape <- 2
+builddata$data[[1]]$size <- 15
+tablegrob <- ggplot_gtable(builddata) 
+grid.newpage()
+tablegrob %>% grid.draw()
+
+# 変更されました。
+# 以上です。ggplotで作成済みのチャートの一部を変更して再表示する方法を実演しました。ご視聴ありがとうございました。
+```
