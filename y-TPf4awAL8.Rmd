@@ -1,0 +1,127 @@
+```{r}
+# https://youtu.be/y-TPf4awAL8
+
+# 今回は支持率を例としてRによる母比率の区間推定をシミュレーションします。
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# 区間推定のための関数を作成します。
+# 例として母集団のサイズ、サンプルサイズそして有意水準等を次の様に設定します。
+# 母集団のサイズは10000人
+population_size <- 10000 
+# サンプルサイズは500人
+sample_size <- 500
+# 有意水準は5%
+alpha <- 0.05
+
+x <- 1 # 試行番号
+bias <- T # サンプリングにバイアスがある(= T)、無い(= F)
+
+# 関数を説明します。
+fun_estimation <- function(x,population_size,sample_size,alpha,bias){
+  # 引数は次の通り。
+  # x 試行番号。
+  # population_size 母集団のサイズ(母集団の人数)。
+  # sample_size サンプルのサイズ(被調査者の人数)。
+  # alpha 有意水準。ここでは両側検定とします。
+  # bias サンプリングにバイアスがあり=T、無し=F。
+  # 始めに母集団の個票を作成します(population_size分の個々の支持、不支持の2項になります)。
+  # 個々の支持、不支持はランダムに生成し割当てます。その設計は、
+  # 1) 母集団を10のグループに分割。
+  # 2) それぞれのグループ毎に以下の3つのタイプのいずれかをランダムに割り当てます。
+  # a) 支持の生成確率が不支持の2倍 prob = c(1,0.5)
+  # b) 支持と不支持の生成確率は同一 prob = c(1,1)
+  # c) 不支持の生成確率が支持の2倍 prob = c(1,2)
+  # それでは母集団を作成します。
+  set.seed(20200412+x)
+  response_mx <- sample(x = c(0.5,1,2),size = 10,replace = T) %>% sapply(X = .,FUN = function(x)sample(x = c(1,0),size = population_size/10,prob = c(1,x),replace = T))
+  # 作成した回答個票を確認
+  response_mx %>% head()
+  response_mx %>% tail()
+  # 1グループ1000人、10グループで10000人の個票が作成されました。
+  apply(response_mx,2,mean)
+  # グループ毎の支持率には偏りが生じています。
+  # approval_rating 母集団の支持率を確認します。
+  approval_rating <- mean(response_mx)
+  approval_rating
+  # 0.4646､46.46%です｡ 
+  # マトリックスを1列目から10列目まで列順に1列に並べてベクトル化し(c([,1],[,2]...[,10]))、IDを振ったデータフレームを作成します。
+  response_df <- data.frame(ID=seq(population_size),Response = as.vector(response_mx))
+  response_df %>% head()
+  response_df %>% tail()
+  # 10000人分の、1000人毎に支持率の偏りのある、個票です。
+  # 次にサンプルとして抽出されるIDを作成します。
+  if(!bias){
+    # バイアスなし。サンプルをランダムに抽出します。
+    extractID <- sample(x = population_size,size = sample_size,replace = F)
+    # 抽出されたIDはこちらの通りです。ランダムに抽出されています｡
+    extractID
+  }else{
+    # バイアスあり。sample_size分､500人分の連続IDを抽出します。隣接したIDが塊として抽出されます。
+    idfirst <- sample(population_size-sample_size+1,1)
+    idlast <- idfirst+sample_size-1
+    extractID <- response_df$ID %>% .[idfirst:idlast]
+    # 抽出されたIDはこちらの通りです。連続した塊として抽出されています｡
+    extractID
+  }
+  # 此処から先は信頼区間の計算です。
+  p_hat <- extractID %>% response_df$Response[.] %>% {sum(.)/sample_size}
+  z <- abs(qnorm(alpha/2))
+  lowerlimit <- {p_hat-z*sqrt(p_hat*(1-p_hat)/sample_size)} %>% round(3)
+  upperlimit <- {p_hat+z*sqrt(p_hat*(1-p_hat)/sample_size)} %>% round(3)
+  result <- ifelse(lowerlimit<=approval_rating & approval_rating<=upperlimit,1,0)
+  resultlist <- data.frame(lowerlimit = lowerlimit,upperlimit = upperlimit,approval_rating = approval_rating,result = result,bias = bias)
+  resultlist
+  # 左から信頼区間下限、信頼区間上限、母集団の支持率(母比率)、信頼区間が母集団の支持率を跨いでいる(=1)いない(=0)、バイアスの有無です。
+  # 今の例ではバイアスありのサンプル抽出で信頼区間は跨いでいない､との結果が現れました｡
+  return(resultlist)
+}
+
+# それでは関数を読み込んで母集団の支持率を区間推定します。
+
+population_size <- 10000
+sample_size <- 500
+alpha <- 0.05
+
+# 始めにサンプリングにバイアスなし。
+fun_estimation(x = 1,population_size = population_size,sample_size = ,sample_size,alpha = alpha,bias = F)
+# 信頼区間が母比率を跨いでいます。
+
+# 次にサンプリングにバイアスあり。
+fun_estimation(x = 1,population_size = population_size,sample_size = ,sample_size,alpha = alpha,bias = T)
+# 信頼区間が母比率を跨いでいません。
+
+# バイアスなしを100回試行します。
+result <- lapply(seq(100),function(x)fun_estimation(x = x,population_size = population_size,sample_size = sample_size,alpha = alpha,bias = F)) %>% Reduce(function(x,y)rbind(x,y),.) %>% data.frame(.,row.names = NULL)
+# その結果です｡
+result
+result$result %>% sum()
+# 100回の試行のうち97回、信頼区間が母集団の支持率を跨いでいます。
+
+# バイアスありを100回試行します。
+result <- lapply(seq(100),function(x)fun_estimation(x = x,population_size = population_size,sample_size = sample_size,alpha = alpha,bias = T)) %>% Reduce(function(x,y)rbind(x,y),.) %>% data.frame(.,row.names = NULL)
+# その結果です｡
+result
+result$result %>% sum()
+# 100回の試行のうち79回、信頼区間が母集団の支持率を跨いでいません。
+
+# サンプルサイズを4倍の2000人にします。
+sample_size <- 2000
+
+# バイアスなしを100回試行します。
+result <- lapply(seq(100),function(x)fun_estimation(x = x,population_size = population_size,sample_size = sample_size,alpha = alpha,bias = F)) %>% Reduce(function(x,y)rbind(x,y),.) %>% data.frame(.,row.names = NULL)
+result
+result$result %>% sum()
+# 100回の試行のうち99回、信頼区間が母集団の支持率を跨いでいます。
+
+# バイアスありを100回試行します。
+result <- lapply(seq(100),function(x)fun_estimation(x = x,population_size = population_size,sample_size = sample_size,alpha = alpha,bias = T)) %>% Reduce(function(x,y)rbind(x,y),.) %>% data.frame(.,row.names = NULL)
+result
+result$result %>% sum()
+# 母集団の20%分をサンプルとしても、その抽出にバイアスがありますと100回の試行のうち79回、信頼区間が母集団の支持率を跨いでいません。
+# 以上です。今回は支持率を例としてRによる母比率の区間推定をシミュレーションしました。ご視聴ありがとうございました。
+```

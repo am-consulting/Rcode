@@ -1,0 +1,78 @@
+```{r}
+# https://youtu.be/EthtXixhBVw
+
+# 今回はggplotで数式、関数のラインチャートやバーチャートを描く方法を実演します。
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr','ggplot2')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# 始めに例として次の数式を描きます。
+```
+
+$$ y=300+0.01\left(0.5x^{2}-50x\right)$$
+
+```{r}
+# ggplotで数式、関数を描くには関数stat_function {ggplot2}を利用します。
+# stat_functionの引数funに数式を指定します。
+# 関数ggplotにはx軸の範囲を指定します。
+# この例では0から100とします。
+# 描いてみましょう。
+
+ggplot(data.frame(x = c(0,100)),mapping = aes(x = x)) + stat_function(fun = function(x)300 + 0.01*(0.5*x^2 - 50*x)) + theme(text = element_text(size = 30))
+
+# ラインの太さ、タイプ、色は引数size、linetype、colorで指定します。
+# 太さを2、タイプをダッシュ、色を赤に変更します。
+ 
+ggplot(data.frame(x = c(0,100)),mapping = aes(x = x)) + stat_function(fun = function(x)300 + 0.01*(0.5*x^2 - 50*x),size = 2,linetype = 'dashed',col = 'red') + theme(text = element_text(size = 30))
+
+# 統計分布も描くことも可能です。
+# 例としてベータ分布の確率密度関数を描きます。
+
+ggplot(data = data.frame(x = c(0,1)),mapping = aes(x = x)) + stat_function(fun = function(x)dbeta(x = x,shape1 = 2,shape2 = 5),geom = 'line',size = 2) + theme(text = element_text(size = 30))
+
+# ベータ分布の累積分布関数を描きます。
+
+ggplot(data = data.frame(x = c(0,1)),mapping = aes(x = x)) + stat_function(fun = function(x)pbeta(q = x,shape1 = 2,shape2 = 5),geom = 'line',size = 2) + theme(text = element_text(size = 30))
+
+# ロジスティック分布の確率密度関数を描きます。
+
+ggplot(data = data.frame(x = c(-20,20)),mapping = aes(x = x)) + stat_function(fun = function(x)dlogis(x = x,location = 5,scale = 2),geom = 'line',size = 2) + theme(text = element_text(size = 30))
+
+# ロジスティック分布の累積分布関数を描きます。
+
+ggplot(data = data.frame(x = c(-20,20)),mapping = aes(x = x)) + stat_function(fun = function(x)plogis(q = x,location = 5,scale = 2),geom = 'line',size = 2) + theme(text = element_text(size = 30))
+
+# ラインの「細かさ」､分割数は引数nで指定します。デフォルトでは101。
+# 例としてベータ分布の確率密度関数をn=10(赤線)とn=200(青線､ドット)で並べてみます｡
+
+ggplot(data = data.frame(x = c(0,1)),mapping = aes(x = x)) + stat_function(fun = function(x)dbeta(x = x,shape1 = 2,shape2 = 5),geom = 'line',size = 1,n = 10,col = 'red') + stat_function(fun = function(x)dbeta(x = x,shape1 = 2,shape2 = 5),geom = 'line',size = 2,n = 200,col = 'blue', linetype = "dotted") + theme(text = element_text(size = 30))
+
+# 赤色の線､nが小さいとラインが粗くなります｡
+
+# 離散型も可能です。
+# 例として二項分布のバーチャートを描きます｡
+
+ggplot(data = data.frame(x = c(0:30)),mapping = aes(x = x)) + stat_function(fun = function(x)dbinom(x = x,size = 50,prob = 0.3),geom = 'bar',n = 31) + theme(text = element_text(size = 30))
+
+# 離散型を描く場合はnをxに合わせる必要があります｡
+# この例ではxが0から30と31分割ですのでnも31としています｡
+
+# xとnが合っていませんと､
+
+ggplot(data = data.frame(x = c(0:30)),mapping = aes(x = x)) + stat_function(fun = function(x)dbinom(x = x,size = 50,prob = 0.3),geom = 'bar',n = 30) + theme(text = element_text(size = 30))
+
+# 描画が崩れます｡
+
+# 関数の引数の指定は引数argsでも可能です｡
+
+ggplot(data = data.frame(x = c(0:30)),mapping = aes(x = x)) + stat_function(fun = dbinom,geom = 'bar', args = list(size = 50,prob = 0.3),n = 31) + theme(text = element_text(size = 30))
+
+# 以上です｡今回はggplotで数式、関数のラインチャートやバーチャートを描く方法を実演しました。ご視聴ありがとうございました｡
+# https://kohske.wordpress.com/2010/12/25/draw-function-without-data-in-ggplot2/
+# https://stackoverflow.com/questions/28969760/r-add-a-curve-with-my-own-equation-to-an-x-y-scatterplot
+# https://public.wsu.edu/~jesse.brunner/classes/bio572/Lab4_StochasticDistributions.html
+# https://stackoverflow.com/questions/27644550/plotting-the-poisson-distribution-using-ggplot2s-stat-function
+```
