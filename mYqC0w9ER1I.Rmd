@@ -1,0 +1,100 @@
+```{r}
+# https://youtu.be/mYqC0w9ER1I
+
+# 今回は相関係数の検出力(power)を求めることが出来る関数pwr.r.test {pwr}で行われている計算を確認します。
+# Cohen, J. (1988). Statistical power analysis for the behavioral sciences (2nd ed.). Hillsdale,NJ:Lawrence Erlbaum.
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('dplyr','pwr','ggplot2','scales')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# pwr.r.test {pwr}は以下のコードで構成されています。
+
+cat("\014")
+pwr.r.test
+
+# ここでは両側検定で、相関係数、有意水準、サンプルサイズが与えられた場合の検出力算出を確認します｡
+# 該当するコードを抜き出しますと以下の6行になります。
+
+# r <- abs(r)
+# ttt <- qt(sig.level/2, df = n - 2, lower = FALSE)
+# rc <- sqrt(ttt^2/(ttt^2 + n - 2))
+# zr <- atanh(r) + r/(2 * (n - 1))
+# zrc <- atanh(rc)
+# pnorm((zr - zrc) * sqrt(n - 3)) + pnorm((-zr - zrc) * sqrt(n - 3))
+
+# サンプルは以下の場合とします。
+
+n <- 50
+sig.level <- 0.05
+r <- 0.35
+
+# 今回のサンプルで検出力を算出しますと、
+pwr.r.test(n = n,r = r,sig.level = 0.05,alternative = 'two')
+
+# 検出力(power)は0.7147075と求められます。
+# 順に確認してみましょう。
+
+# 1行目では標本相関係数rを絶対値変換しています。
+r <- abs(r);r
+
+# 2行目では確率が(両側とし有意水準/2)、自由度はn-2に対応する確率点、境界t値を算出しています。
+ttt <- qt(sig.level/2, df = n - 2, lower = FALSE);ttt
+
+# 参考として棄却域を描きます。
+g <- ggplot(data = data.frame(x = c(-5,5)),mapping = aes(x = x)) + theme_minimal() + stat_function(fun = function(x)dt(x = x,df = n-2),geom = 'line',size = 1,n = 200) + theme(text = element_text(size = 30)) + geom_vline(xintercept = c(-ttt,ttt)) + scale_x_continuous(breaks = pretty_breaks(10)) + scale_y_continuous(breaks = pretty_breaks(10))
+g + stat_function(fun = function(x)dt(x = x,df = n-2),xlim = c(ttt,5),geom = 'area',fill = 'red') + stat_function(fun = function(x)dt(x = x,df = n-2),xlim = c(-ttt,-5),geom = 'area',fill = 'red')
+# 求めたtttを分位点とする棄却域です。
+# g + geom_area(data = subset(ggplot_build(g)$data[[1]],x > ttt),aes(x = x,y = y),fill = "red") + geom_area(data = subset(ggplot_build(g)$data[[1]],x < -ttt),aes(x = x,y = y),fill = "red")
+# Cohen (1988) p.545
+# https://stackoverflow.com/questions/31215748/how-to-shade-part-of-a-density-curve-in-ggplot-with-no-y-axis-data
+
+# 3行目ではt = r(n-2)^0.5/(1-r^2)^0.5が自由度n-2のt分布に従うことから、式を変形し、サンプルサイズと2行目で求めた境界t値(ttt)に対応する母相関係数rc = (t^2/(t^2+n-2))^0.5を算出しています。
+rc <- sqrt(ttt^2/(ttt^2 + n - 2));rc
+# r:相関係数
+# https://www.heisei-u.ac.jp/ba/fukui/pdf/stattext13.pdf
+# https://stat.odyssey-com.co.jp/study/pdf/statex/185-190.pdf
+
+# 4行目では標本相関係数rをフィッシャーのz変換(逆双曲線正接関数)、さらにバイアス補正を加算しています。
+zr <- atanh(r) + r/(2 * (n - 1));zr
+
+# 参考としてバイアス補正後のアークタンジェント関数で標本相関係数(0.35、-0.35)を確認します。
+ggplot(data = data.frame(x = c(-0.99,0.99)),mapping = aes(x = x)) + theme_minimal() + stat_function(fun = function(x)atanh(x) + r/(2 * (n - 1)),geom = 'line',size = 1,n = 200) + theme(text = element_text(size = 30)) + geom_vline(xintercept = c(-r,r)) + scale_x_continuous(breaks = pretty_breaks(10)) + scale_y_continuous(breaks = pretty_breaks(10))
+# 垂直線は標本相関係数r、-rです。
+# https://www.sas.com/offices/asiapacific/japan/service/technical/faq/list/body/stat086.html
+# https://www.sist.ac.jp/~kanakubo/research/statistic/bosoukan.html
+# http://hs-www.hyogo-dai.ac.jp/~kawano/HStat/?plugin=cssj&page=2010%2F12th%2FPopulation_Correlation_Coefficien 
+
+# 5行目では2行目で求めた母相関係数rcをフィッシャーのz変換。
+zrc <- atanh(rc);zrc
+
+# 6行目では「標本相関係数のz変換(zr)が平均を母相関係数のz変換(zrc)、分散を1/(n-3)とする正規分布に近似的に従う」ことから正規化(標準化)したzrを分位点として算出しています(両側)。
+# H0としての正規化z値。
+(zr - zrc) * sqrt(n - 3)
+(-zr - zrc) * sqrt(n - 3)
+
+# 最後に上記の正規化したzr、-zrを分位点とする確率を求めて合計することによって1-β、検出力を求めています。
+# 始めにzr
+pnorm((zr - zrc) * sqrt(n - 3))
+# 確率密度関数
+g0 <- ggplot(data = data.frame(x = c(-5,5)),mapping = aes(x = x)) + theme_minimal() + stat_function(fun = function(x)dnorm(x = x),geom = 'line',size = 1,n = 200) + theme(text = element_text(size = 30))
+g0 + stat_function(fun = function(x)dnorm(x = x),xlim = c((zr - zrc) * sqrt(n - 3),0),geom = 'area', fill = 'red')
+# 次に-zr
+pnorm((-zr - zrc) * sqrt(n - 3))
+# 確率密度関数
+g0 + stat_function(fun = function(x)dnorm(x = x),xlim = c((-zr - zrc) * sqrt(n - 3),0),geom = 'area', fill = 'red')
+
+# その合計。
+pnorm((zr - zrc) * sqrt(n - 3)) + pnorm((-zr - zrc) * sqrt(n - 3))
+
+# 改めて関数で検出力を出力します。
+pwr.r.test(n = n,r = r,sig.level = 0.05,alternative = 'two')
+
+# Cohen (1988) p.546
+# https://bellcurve.jp/statistics/course/9591.html
+# http://www.igaku-shoin.co.jp/nwsppr/n1997dir/n2241dir/n2241_07.htm
+# 以上です。今回は相関係数の検出力(power)を求めることが出来る関数pwr.r.test {pwr}で行われている計算を確認しました。ご視聴ありがとうございました。
+```

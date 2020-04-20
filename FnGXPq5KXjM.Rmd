@@ -1,0 +1,43 @@
+```{r}
+# https://youtu.be/FnGXPq5KXjM
+
+# 今回はggplotで描いた統計分布の一部を分位点を境に塗りつぶす方法を実演します。
+# https://stackoverflow.com/questions/48753007/using-stat-function-to-draw-partially-shaded-normal-curve-in-ggplot2
+
+# 必要なパッケージを読み込みます。
+
+pkgs <- c('dplyr','ggplot2')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# 例として正規分布の確率密度関数、その両側5%を塗りつぶします
+
+alpha <- 0.05
+z <- abs(qnorm(alpha/2))
+
+# x軸の範囲は次の通りとします。
+x_range <- c(-5,5)
+
+# 始めに確率密度関数を描きます。
+g0 <- ggplot(data = data.frame(x = x_range),mapping = aes(x = x)) + theme_minimal() + stat_function(fun = function(x)dnorm(x = x),geom = 'line',size = 1,n = 200) + theme(text = element_text(size = 30))
+g0
+
+# 次に右側5%を塗りつぶします。
+# 関数stat_functionの引数xlimをc(分位点(z),x軸最右端)とし、geomは"area"にします。
+g <- g0 + stat_function(fun = function(x)dnorm(x = x),xlim = c(z,x_range[2]),geom = 'area', fill = 'red')
+g
+
+# 最後に左側5%を塗りつぶします。
+# 関数stat_functionの引数xlimをc(分位点(z),x軸最左端)とし、geomは"area"にします。
+g <- g + stat_function(fun = function(x)dnorm(x = x),xlim = c(-z,x_range[1]),geom = "area", fill = "red")
+g
+
+# 出来上がりました。
+
+# 分位点の内側を塗りつぶしたい場合として-1から1の範囲を塗りつぶします。
+# 引数xlimをc(-1,1)とします。
+g0 + stat_function(fun = function(x)dnorm(x = x),xlim = c(-1,1),geom = 'area', fill = 'red')
+
+# 以上です。今回はggplotで描いた統計分布の一部を分位点を境に塗りつぶす方法を実演しました。ご視聴ありがとうございました。
+```
