@@ -1,0 +1,111 @@
+```{r}
+# https://youtu.be/Zr8xHInG5po
+
+# 今回は非正規分布の母集団から抽出したサンプルの平均値の集合、その正規性ついて母集団統計分布およびサンプルサイズ毎にシミュレーションしてみます。
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr','ggplot2')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+options(scipen=999)
+
+# 今回は期待値と分散を持つ母集団分布としてベータ分布、指数分布そして一様分布を例に取ります。
+# 母集団サンプルとするベータ分布
+x_range <- c(0,1)
+shape1 <- 2
+shape2 <- 5
+ggplot(data = data.frame(x = x_range),mapping = aes(x = x)) + theme_minimal() + stat_function(fun = function(x)dbeta(x = x,shape1 = shape1,shape2 = shape2),geom = 'line',size = 1,n = 100) + theme(text = element_text(size = 30)) + labs(title = paste0('ベータ分布 shape1=',shape1,' shape2=',shape2)) + ylab(label = 'PDF')
+
+# 母集団サンプルとする指数分布
+x_range <- c(0,5)
+rate <- 5
+ggplot(data = data.frame(x = x_range),mapping = aes(x = x)) + theme_minimal() + stat_function(fun = function(x)dexp(x = x,rate = rate),geom = 'line',size = 1,n = 100) + theme(text = element_text(size = 30)) + labs(title = paste0('指数分布 rate=',rate)) + ylab(label = 'PDF')
+
+# 母集団サンプルとする一様分布
+xmin <- -100
+xmax <- 100
+x_range <- c(xmin,xmax)
+ggplot(data = data.frame(x = x_range),mapping = aes(x = x)) + theme_minimal() + stat_function(fun = function(x)dunif(x = x,min = xmin,max = xmax),geom = 'line',size = 1,n = 100) + theme(text = element_text(size = 30)) + labs(title = paste0('一様分布 min=',xmin,' max=',xmax)) + ylab(label = 'PDF')
+
+# それぞれの分布の母集団を作成します。
+# 母集団サイズは共通として100万とします。
+populationsize <- 10^7
+
+cat("\014")
+set.seed(2020042701)
+population_beta <- rbeta(n = populationsize,shape1 = shape1,shape2 = shape2);population_beta %>% head()
+population_exp <- rexp(n = populationsize,rate = rate);population_exp %>% head()
+population_unif <- runif(n = populationsize,min = xmin,max = xmax);population_unif %>% head()
+
+# 作成した母集団をヒストグラムで確認します。
+par(cex.main = 1.5,cex.lab = 1.5,cex.axis = 1.5,mfrow = c(3,1))
+graphics::hist(x = population_beta,breaks = 'Sturges')
+graphics::hist(x = population_exp,breaks = 'Sturges')
+graphics::hist(x = population_unif,breaks = 'Sturges')
+
+# 分析の手順は次のとおりです。
+# 1) 3つの分布毎に[samplesize]分のサンプルを抽出し、同サンプルの算術平均値を計算。
+# 2) 上記1を[trial]分だけ繰り返し、平均値集合[samplemeanset](サンプルサイズは[trial])を作成。
+# 3) 上記2の平均値集合[samplemeanset]の正規性をシャピロ･ウィルク検定、shapiro.test {stats}で確認。
+# 4) 帰無仮説は「[samplemeanset]は正規分布に従う」です。
+
+# こちらはそのための関数です。
+fun_sim <- function(population,trial,samplesize){
+  # 母集団[population]から[samplesize]分のサンプルを抽出し、同サンプルの算術平均値を計算。
+  # サイズ[trial]の平均値集合を[samplemeanset]に格納。
+  set.seed(2020042702)
+  samplemeanset <- sapply(X = seq(trial),function(x){sample(x = population,size = samplesize,replace = F) %>% mean()})
+  # length(samplemeanset) %>% print()
+  # [samplemeanset]の正規性検定結果(p値)を返します。
+  return(shapiro.test(x = samplemeanset)$p.value %>% signif(.,digits = 2))
+}
+
+# [trial]は500回、つまり500個の算術平均値が[samplemeanset]に格納されます。
+trial <- 500
+
+# サンプルサイズは次の通りとします。
+n <- c(2,populationsize*10^-6,populationsize*2*10^-6,populationsize*5*10^-6,populationsize*10^-5,populationsize*5*10^-5)
+n
+
+# それでは3つの統計分布それぞれについてサンプルサイズ毎の[samplemeanset]を作成し、その正規性を検定してみましょう。
+resultdf0 <- matrix(nrow = length(n),ncol = 3)
+for(iii in 1:3){
+  if(iii==1)population <- population_beta
+  if(iii==2)population <- population_exp
+  if(iii==3)population <- population_unif
+  tmp <- sapply(n,function(x)fun_sim(population = population,trial = trial,samplesize = x))
+  resultdf0[,iii] <- tmp
+}
+resultdf <- resultdf0 %>% data.frame(n,.) %>% {colnames(.) <- c('n','beta','exp','unif');.}
+cat("\014")
+resultdf
+
+# 統計分布毎、サンプルサイズ毎の正規性検定結果p値の一覧です。
+# 0.05未満を「R」に置換します。
+resultdf[resultdf<0.05] <-  'R' # Rejected 
+cat("\014")
+resultdf
+
+# サンプルサイズが2の場合、
+# そのサンプル算術平均値、計500個の分布の正規性は
+# いずれの分布でも棄却。
+
+# サンプルサイズが10と20の場合、
+# そのサンプル算術平均値、計500個の分布の正規性は
+# ベータ分布と指数分布では棄却。一様分布では棄却されず。
+
+# サンプルサイズが50の場合、
+# そのサンプル算術平均値、計500個の分布の正規性は
+# 指数分布では棄却。ベータ分布と一様分布では棄却されず。
+
+# サンプルサイズが100の場合、
+# そのサンプル算術平均値、計500個の分布の正規性は
+# ベータ分布と指数分布では棄却されず。一様分布では棄却。
+
+# サンプルサイズが500の場合、
+# そのサンプル算術平均値、計500個の分布の正規性は
+# 指数分布では棄却。ベータ分布と一様分布では棄却されず。
+
+# という1つのシミュレーションでした。ご視聴ありがとうございました。
+```
