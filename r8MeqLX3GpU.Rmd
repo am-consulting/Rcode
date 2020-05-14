@@ -1,0 +1,81 @@
+```{r}
+# https://youtu.be/r8MeqLX3GpU
+
+# 今回はRによる正規性検定のためのggplotを利用したQ-Qプロット作成を実演します。
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr','ggplot2')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+
+# Q-Qプロットの作成にはパッケージggplot2の関数stat_qqとstat_qq_lineを利用します。
+
+# 始めに正規分布に従うサンプルを作成します。
+cat('\014')
+n <- 500
+x <- rnorm(n = n,mean = 100,sd = 10)
+x
+
+# 正規性検定の場合、stat_qqの引数distributionはqnorm{stats}、そしてstat_qq_lineの引数line.pには 25パーセンタイル(第一四分位数)と75パーセンタイル(第三四分位数)を指定します。
+g <- ggplot(mapping = aes(sample = x)) + stat_qq(distribution = stats::qnorm,size = 3,pch = 1) + stat_qq_line(line.p = c(0.25, 0.75),col = 'red',size = 1) + theme_minimal() + theme(text = element_text(size = 20))
+g
+
+# Q-Qプロットが作成されました。
+
+# 標準正規分布(qnormのデフォルト)に対応してサンプルを正規化しましても「見た目の外れ具合」は同じです(*但し平均値分を減算し、標準偏差で除した分だけ実際の姿形は変わっています)。
+x1 <- scale(x)
+g1 <- ggplot(mapping = aes(sample = x1)) + stat_qq(distribution = stats::qnorm,size = 3,pch = 1) + stat_qq_line(line.p = c(0.25, 0.75),col = 'red',size = 1) + theme_minimal() + theme(text = element_text(size = 20))
+g1
+
+# サンプルを正規分布から抽出していますので、「昇順にソートしたサンプルサイズ分の確率ベクトルに対応する正規分布の確率点」と「昇順にソートしたサンプル」はほぼ直線に並びます。
+
+# 各ポイントを手作業でも確認してみます。
+x0 <- ppoints(n = n) %>% qnorm() # 昇順にソートしたサンプルサイズ分の確率ベクトルに対応する正規分布の確率点
+y0 <- sort(x) # 昇順にソートしたサンプル
+g <- g + geom_point(mapping = aes(x = x0,y = y0),col = 'blue')
+g
+
+# 一致します。
+
+# 25および75パーセンタイル点を追加します。*本例はnを500としているためインデックスに小数点が出ません。
+xp <- c(x0[n*0.25],x0[n*0.75])
+yp <- c(y0[n*0.25],y0[n*0.75])
+g + geom_point(mapping = aes(x = xp,y = yp),pch = 13,size = 10,inherit.aes = F)
+
+# 次にサンプルを非正規分布から抽出してみます。
+# 一様分布から抽出します。
+cat('\014')
+x <- runif(n = n)
+x
+
+g <- ggplot(mapping = aes(sample = x)) + stat_qq(distribution = stats::qnorm,size = 3,pch = 1) + stat_qq_line(line.p = c(0.25, 0.75),col = 'red',size = 1) + theme_minimal() + theme(text = element_text(size=20))
+x0 <- ppoints(n = n) %>% qnorm()
+y0 <- sort(x)
+g <- g + geom_point(mapping = aes(x = x0,y = y0),col = 'blue')
+xp <- c(x0[n*0.25],x0[n*0.75])
+yp <- c(y0[n*0.25],y0[n*0.75])
+g + geom_point(mapping = aes(x = xp,y = yp),pch = 13,size = 10,inherit.aes = F)
+# 2つのパーセンタイルを結んだ直線には並びません。
+
+# 最後に次の形のベータ分布でも確認してみます。
+x_range <- c(0,1)
+shape1 <- 2
+shape2 <- 10
+ggplot(data = data.frame(x = x_range),mapping = aes(x = x)) + theme_minimal() + stat_function(fun = function(x)dbeta(x = x,shape1 = shape1,shape2 = shape2),geom = 'line',size = 1,n = 100) + theme(text = element_text(size = 30)) + labs(title = paste0('ベータ分布 shape1=',shape1,' shape2=',shape2)) + ylab(label = 'PDF')
+
+cat('\014')
+x <- rbeta(n = n,shape1 = shape1,shape2 = shape2)
+x
+g <- ggplot(mapping = aes(sample = x)) + stat_qq(distribution = stats::qnorm,size = 3,pch = 1) + stat_qq_line(line.p = c(0.25, 0.75),col = 'red',size = 1) + theme_minimal() + theme(text = element_text(size=20))
+x0 <- ppoints(n = n) %>% qnorm()
+y0 <- sort(x)
+g <- g + geom_point(mapping = aes(x = x0,y = y0),col = 'blue')
+xp <- c(x0[n*0.25],x0[n*0.75])
+yp <- c(y0[n*0.25],y0[n*0.75])
+g + geom_point(mapping = aes(x = xp,y = yp),pch = 13,size = 10,inherit.aes = F)
+
+# こちらも2つのパーセンタイルを結んだ直線には並びません。
+
+# 以上です。今回はRによる正規性検定のためのggplotを利用したQ-Qプロット作成を実演しました。ご視聴ありがとうございました。
+```
