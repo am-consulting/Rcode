@@ -1,0 +1,117 @@
+```{r}
+# https://youtu.be/jvkMPquLjbg
+
+# 今回はRを利用して見せかけの回帰をシミュレーションで確認してみます。
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr','tseries','animation','scales','knitr','kableExtra')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+Sys.Date();version$version.string
+
+# こちらはランダムウォーク2系列作成とその線形回帰のための関数です。
+fun_create_randomwalk <- function(n){
+  obj <- data.frame(n = seq(n),rw_blue = cumsum(rnorm(n)),rw_red = cumsum(rnorm(n)))
+  result_lm <- lm(formula = rw_red ~ rw_blue,data = obj)
+  result_adf <- apply(obj[,-1],2,adf.test)
+  return(list('obj' = obj,'result_lm' = result_lm,'result_adf' = result_adf))
+}
+
+# サンプルサイズを100として、
+n <- 100
+
+# 1行目で正規分布に従う乱数の累積和2系列(rw_blue、rw_red、サンプルサイズはn)のデータフレームを作成します。
+obj %>% head()
+obj %>% tail()
+
+# 2行目は両系列の線形回帰を取ります。
+result_lm
+
+# 3行目は両系列それぞれの単位根検定を行います。
+result_adf
+
+# それではサンプルサイズを100として100組の結果を作成してみます。
+result_lm_adf <- lapply(X = seq(100),FUN = function(x)fun_create_randomwalk(n = n))
+
+# 1組目を確認してみます。
+# ランダムウォークのデータフレーム
+cat('\014')
+result_lm_adf[[1]]$obj
+
+# 両系列の線形回帰
+cat('\014')
+result_lm_adf[[1]]$result_lm
+
+# 両系列それぞれの単位根検定
+cat('\014')
+result_lm_adf[[1]]$result_adf
+
+# シミュレーションの結果のサイズは
+result_lm_adf %>% length()
+
+# 100組です。
+
+# シミュレーション結果をプロットしてみます。
+setwd(dir = 'D:/tmpimg')
+giffile <- 'spuriousRegression01.gif'
+windowsFonts(Consolas = windowsFont("Consolas"))
+fun_plot <- function(x,obj,result_lm,result_adf,line_color = c('blue','red')){
+  par(mfrow = c(1,2),oma = c(0,0,6,0),family = 'Consolas')
+  # left part
+  plot(obj[,c(1,2)],col = 'blue',type = 'o',ylim = c(min(obj[,-1]),max(obj[,-1])),xlab = '',ylab = '',main = 'Timeseries',cex.main = 3,cex.axis = 2)
+  lines(obj[,3],col = 'red',type = 'o')
+  panel.first = grid(nx = NULL,ny = NULL,lty = 2,equilogs = T)
+  legend('topleft',col = line_color,lty = 1,legend = colnames(obj)[-1],cex = 3,bty = 'n')
+  # right part
+  plot(obj[,-1],main = 'Scatter plot',cex.main = 3,cex.axis = 2,cex = 2)
+  abline(result_lm,col = 'red',lwd = 2)
+  panel.first = grid(nx = NULL,ny = NULL,lty = 2,equilogs = T)
+  corr <- round(summary(result_lm)$r.squared^0.5,2)
+  text(x = mean(par('usr')[1:2]),y = mean(par('usr')[3:4]),labels = paste0('|r|=',corr),cex = 5,col = alpha("red", 0.5))
+  # common title
+  mtext(text = paste0('Test:',formatC(x,width = 3,flag = '0'),'/',length(result_lm_adf),'\n|r|=',corr),side = 3,outer = T,cex = 3,font = 2)
+}
+saveGIF({ani.options(loop = T)
+  for(iii in seq(result_lm_adf)){
+    obj <- result_lm_adf[[iii]]$obj
+    result_lm <- result_lm_adf[[iii]]$result_lm
+    result_adf <- result_lm_adf[[iii]]$result_adf
+    fun_plot(x = iii,obj = obj,result_lm = result_lm,result_adf = result_adf)
+  }
+},
+movie.name = giffile,interval = 1,ani.width = 1100, ani.height = 800)
+
+# 最上部のテキストは、
+# シミュレーションナンバー/総シミュレーション回数。
+# チャート左がランダムウォーク2系列の時系列プロット。
+# チャート右が2系列の線形回帰。
+# |r|は相関係数の絶対値。
+
+# 結果をまとめます。
+abs_r <- sapply(seq(result_lm_adf),function(x)result_lm_adf[[x]]$result_lm %>% summary() %>% .$r.squared %>% sqrt(.))
+adftest_blue <- sapply(seq(result_lm_adf),function(x)result_lm_adf[[x]]$result_adf$rw_blue$p.value)
+adftest_red <- sapply(seq(result_lm_adf),function(x)result_lm_adf[[x]]$result_adf$rw_red$p.value)
+resultdf <- data.frame(N = seq(result_lm_adf),'|相関係数|' = abs_r,'単位根検定P値:青' = adftest_blue,'単位根検P値:赤' = adftest_red,check.names = F)
+kable(x = resultdf) %>% kable_styling(font_size = 20)
+
+# 100回のシミュレーション毎の相関係数絶対値と両系列それぞれの単位根検定P値です。
+
+# 相関係数の大きさで分類しますと
+# 0.8以上は100回中、
+resultdf$`|相関係数|` %>% {0.8<=.} %>% sum()
+
+# 0.6以上0.8未満は100回中、
+resultdf$`|相関係数|` %>% {0.6<=. & .<0.8} %>% sum()
+
+# 0.4以上0.6未満は100回中、
+resultdf$`|相関係数|` %>% {0.4<=. & .<0.6} %>% sum()
+
+# 0.2以上0.4未満は100回中、
+resultdf$`|相関係数|` %>% {0.2<=. & .<0.4} %>% sum()
+
+# 0.2未満は100回中、
+resultdf$`|相関係数|` %>% {.<0.2} %>% sum()
+
+# ランダムウォーク同士の相関でもこの様な結果が現れます、というお話でした。
+# 以上です。今回はRを利用して見せかけの回帰をシミュレーションで確認してみました。ご視聴ありがとうございました。
+```
