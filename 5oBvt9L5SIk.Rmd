@@ -1,0 +1,234 @@
+```{r}
+# https://youtu.be/5oBvt9L5SIk
+
+# 今回は線形回帰におけるA:回帰係数の信頼区間、B:母回帰式の区間推定、C:目的変数の予測区間、D:回帰直線の同時信頼区間を確認します。
+# 参考資料
+# 1 http://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/BS704_Confidence_Intervals/BS704_Confidence_Intervals_print.html
+# 2 http://lbm.ab.a.u-tokyo.ac.jp/~omori/kokusai11/kokusai11_1212.html
+# 3 http://www2.econ.osaka-u.ac.jp/~tanizaki/class/2016/basic_econome/03.pdf
+# 4 http://www.hil.hiroshima-u.ac.jp/sys2/a/kaikibunseki.pdf
+# 5 http://stat.sys.i.kyoto-u.ac.jp/titech/class/doc/lec20021114-9.pdf
+# 6 https://www.jstage.jst.go.jp/article/jscswabun/14/1/14_KJ00001896557/_pdf
+# 7 https://www2.isye.gatech.edu/~yxie77/isye2028/lecture12.pdf
+
+Sys.Date();version$version.string;rstudioapi::versionInfo()$version
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+```
+
+```{r}
+# 次の1次1変数式を母回帰式とします。
+# なお以降、有意水準は全て5%とします。
+```
+
+$$
+y=\alpha x + \beta + \epsilon
+$$
+```{r}
+# サンプルを作成します。
+# サイズと説明変数の設定
+n <- 50
+x <- seq(n)
+
+# 誤差の設定
+# 今回設定した標準偏差の数値に意味はありません。
+# 母回帰式との違いや信頼区間が明瞭となるよう傾きに対して標準偏差を大きめにしています。
+set.seed(20200524)
+error <- rnorm(n = n,mean = 0,sd = 10)
+
+# 目的変数の設定
+# 今回設定した傾きと切片の数値に意味はありません。
+Y <- 2 * x + 10 
+y <- Y + error
+```
+
+```{r}
+# 作成した変数を確認します。
+cat('\014')
+x
+y
+Y
+```
+
+```{r}
+# サンプルを利用して散布図作成そして説明変数(x)と目的変数(y)の線形回帰を取ります。
+# 参考資料1,2,3,7
+# 有意水準
+significant_level <- 0.05
+
+# 自由度n-2、有意水準0.05のt値
+t_value <- qt(1-significant_level/2, n-2) 
+
+# 説明変数xの偏差平方和
+Sxx <- sum((x - mean(x))^2) 
+
+# 説明変数xと目的変数yの積和
+Sxy <- sum((x-mean(x))*(y-mean(y))) 
+
+# 回帰直線の傾きの推定量
+a <- Sxy/Sxx 
+
+# 回帰直線の切片の推定量
+b <- mean(y) - mean(x) * a 
+
+# 推定されたy
+estimated_y <- a*x+b 
+
+# 残差
+residuals <- y - estimated_y 
+
+# 残差標準偏差
+sigma <- sqrt(sum((residuals-mean(residuals))^2)/(n-2)) 
+
+# 散布図作成
+g1 <- ggplot(mapping = aes(x = x)) + geom_point(mapping = aes(y = y),size = 3) + theme_minimal() + theme(text = element_text(size = 30),legend.position = 'top',legend.title = element_blank(),legend.key.width = unit(4, "cm"))
+g1
+
+# 土台とする散布図です。
+
+# 設定した傾きと切片に基づく直線を引きます。
+g2 <- g1 + geom_line(mapping = aes(x = x,y = Y,col = '母回帰式'),size = 1.1) + scale_color_manual(values = c('母回帰式' = 'red'))
+g2
+
+# 赤色の線が設定した傾きと切片による直線です。
+
+# 推定された傾きと切片に基づく直線を引きます。
+g <- g2 + stat_function(fun = function(x)a*x + b,geom = 'line',size = 1.1,n = 2,col = 'blue')
+g
+
+# 青色の線が推定された傾きと切片による回帰直線です。
+
+# 推定された係数(傾き)と切片は、
+cat('\014')
+a;b
+
+# なお推定された係数と切片は以下の方法でも取り出せます。
+result_lm <- lm(y ~ x)
+result_lm$coefficients[2] # a
+result_lm$coefficients[1] # b
+result_lm %>% summary()
+```
+
+```{r}
+# A:回帰係数の信頼区間
+# 推定された係数 alpha と 切片 beta それぞれの信頼区間
+# 参考資料3,7
+# 次の数式が信頼区間を表します。
+```
+
+$$\hat{\alpha}\pm t_{(n-2,\frac{0.05}{2})}\times\frac{\hat{\sigma}}{\sqrt{S_{xx}}}\quad,\quad \hat{\beta}\pm t_{(n-2,\frac{0.05}{2})}\times\hat{\sigma}\times{\sqrt{\frac{1}{n}+\frac{\bar{x}^{2}}{S_{xx}}}}$$
+
+```{r}
+# 係数(傾き)
+ci <- t_value * sigma / sqrt(Sxx)
+a - ci;a + ci
+
+# 切片
+ci <- t_value * sigma * sqrt(1/n+mean(x)^2/Sxx)
+b - ci;b + ci
+
+# なお関数confint {stats}でも直接求められます
+confint(result_lm, level = .95)
+
+# 95%信頼区間が求められます。
+```
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+```{r}
+# B:母回帰式の区間推定
+# 母回帰式の存在範囲推定 = 母回帰式の区間推定
+# なおggplotでse = Tとした場合に表示される信頼区間は、この母回帰式の区間推定になります。
+# 参考資料4
+# 次の数式が区間推定を表します。
+```
+
+$$(\hat{\alpha}x_{0}+\hat{\beta})\pm t_{(n-2,\frac{0.05}{2})}\times\sqrt{\frac{1}{n}+\frac{(x-\bar{x})^{2}}{S_{xx}}}\times \hat{\sigma}$$
+
+```{r}
+ci <- t_value * sqrt(1/n + ((x-mean(x))^2)/Sxx) * sigma
+lower1 <- estimated_y - ci;upper1
+upper1 <- estimated_y + ci;lower1
+g3 <- g2 + geom_line(mapping = aes(y = estimated_y),size = 1.1,col = 'blue',linetype = 'dotted')
+g3
+g <- g3 + geom_line(mapping = aes(y = upper1),size = 1,col = 'blue',linetype = 'dashed') + geom_line(mapping = aes(y = lower1),size = 1,col = 'blue',linetype = 'dashed') + labs(title = '母回帰式の存在範囲推定')
+g
+
+# 回帰式とその信頼区間です。
+
+# geom_smoothで回帰直線と信頼区間を描きますと、
+g + geom_smooth(mapping = aes(x = x,y = y), method = 'lm',se = T,inherit.aes = T)
+
+# 重なります。
+```
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+```{r}
+# C:目的変数の予測区間
+# 説明変数 x の値をx0 に指定したときの目的変数 y の信頼区間 = 予測区間
+# 参考資料4
+# 次の数式が予測区間を表します。
+```
+
+$$(\hat{\alpha}x_{0}+\hat{\beta})\pm t_{(n-2,\frac{0.05}{2})}\times\sqrt{1+\frac{1}{n}+\frac{(x-\bar{x})^{2}}{S_{xx}}}\times \hat{\sigma}$$
+
+```{r}
+ci <- t_value * sqrt(1 + 1/n + ((x-mean(x))^2)/Sxx) * sigma
+lower2 <- estimated_y - ci;upper2
+upper2 <- estimated_y + ci;lower2
+
+g3 <- g2 + geom_line(mapping = aes(y = estimated_y),size = 1.1,col = 'blue',linetype = 'solid')
+g3
+g <- g3 + geom_line(mapping = aes(y = upper2),size = 1,col = 'blue',linetype = 'dashed') + geom_line(mapping = aes(y = lower2),size = 1,col = 'blue',linetype = 'dashed') + geom_ribbon(mapping = aes(ymin = lower2,ymax = upper2),alpha = 0.2) + labs(title = '目的変数 y の信頼区間 = 予測区間')
+g
+
+# グレーの範囲が予測区間です。
+```
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+```{r}
+# D:回帰直線の同時信頼区間
+# x = x0 だけでなく、すべての x に対する回帰直線の同時信頼区間
+# 参考資料5,6
+# 次の数式が同時信頼区間を表します。
+```
+
+$$(\hat{\alpha}x_{0}+\hat{\beta})\pm \sqrt{2F_{(2,n-2,\frac{0.05}{2})}}\times\sqrt{\frac{1}{n}+\frac{(x-\bar{x})^{2}}{S_{xx}}}\times \hat{\sigma}$$
+
+```{r}
+ci <-  sqrt(2*qf(significant_level, 2, n-2)) * sqrt(1/n + ((x-mean(x))^2)/Sxx) * sigma
+lower3 <- estimated_y - ci;upper3
+upper3 <- estimated_y + ci;lower3
+g3 <- g2 + geom_line(mapping = aes(y = estimated_y),size = 1.1,col = 'blue',linetype = 'solid')
+g3
+g <- g3 + geom_line(mapping = aes(y = upper3),size = 1,col = 'blue',linetype = 'dashed') + geom_line(mapping = aes(y = lower3),size = 1,col = 'blue',linetype = 'dashed') + geom_ribbon(mapping = aes(ymin = lower3,ymax = upper3),alpha = 0.2) + labs(title = 'すべての x に対する回帰直線の同時信頼区間')
+g
+
+# 見えにくいのですがグレーの範囲が同時信頼区間です。
+
+# 以上です。今回は線形回帰における回帰係数の信頼区間、母回帰式の区間推定、目的変数の予測区間、回帰直線の同時信頼区間を確認しました。ご視聴ありがとうございました。
+```
