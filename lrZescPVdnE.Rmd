@@ -1,0 +1,124 @@
+```{r}
+# https://youtu.be/lrZescPVdnE
+
+# ロジスティック回帰の解釈を確認します。
+# 以降、有意水準は全て5%とします。
+# 参考資料
+# 1 https://www.slideshare.net/logics-of-blue/2-5-2
+# 2 http://cse.naro.affrc.go.jp/takezawa/r-tips/r/72.html
+# 3 https://to-kei.net/basic-study/regression/logistic_regression/
+# 4 https://oku.edu.mie-u.ac.jp/~okumura/stat/logistic.html
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr','ggplot2','gridExtra','scales')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+Sys.Date();version$version.string;rstudioapi::versionInfo()$version
+```
+
+```{r}
+# ロジスティック回帰(一般化線形モデル)
+# 確率分布:二項分布
+# リンク関数:応答変数にロジット関数を適用
+# 線形予測子:beta + alpha * x
+# 二項分布:二値確率変数
+# f(x):ロジット関数
+# g(x):ロジスティック関数(ロジット関数の逆関数)
+```
+
+$$
+f(x) = {\rm log_e} \left( \frac{x}{1-x} \right),\ 
+g(y) = \frac{1}{1+{\rm exp}(-y)}\\
+{\rm log} \left( \frac{p}{1-p} \right) = \beta + \alpha x,\ 
+p = \frac{1}{1 + {\rm exp} [-(\beta + \alpha x)]}\\
+M \sim {\rm Binomial} \left( m|N, \frac{1}{1+{\rm exp} [-(\beta + \alpha x)]}\right),\
+{\rm Binomial}(m|N,p) = {}_N \mathrm{C}_m \cdot p^m \cdot (1-p)^{N-m} 
+$$
+```{r}
+# ロジット関数とロジスティック関数の形状を確認します。
+gg <- list()
+# ロジット関数
+x <- seq(0.01,0.99,0.01)
+fx <- log(x/(1-x),base = exp(1))
+gg[[1]] <- ggplot(mapping = aes(x = x,y = fx))+ geom_line(col = 'red',size = 2) + theme_minimal() + theme(plot.title = element_text(size = 20),text = element_text(size = 30)) + labs(title = 'ロジット関数')
+# ロジスティック関数(ロジット関数の逆関数)
+y <- seq(-5,5,0.01)
+gy <- 1/(1+exp(-y))
+gg[[2]] <- ggplot(mapping = aes(x = y,y = gy))+ geom_line(col = 'blue',size = 2) + theme_minimal() + theme(plot.title = element_text(size = 20),text = element_text(size = 30)) + labs(title = 'ロジスティック関数(ロジット関数の逆関数)')
+ggpubr::as_ggplot(arrangeGrob(grobs = gg,ncol = 1))
+# 上段がロジット関数、下段がロジスティック関数です。
+```
+
+```{r}
+# サンプルを作成します。
+
+# 成功確率 p の作成。設定した数値に意味はありません。
+x0 <- seq(from = 0,to = 10,by = 1)
+a <- 0.9
+b <- -5
+p <- 1/(1+exp(-(b+a*x0)))
+p
+g <- ggplot(mapping = aes(x = x0)) + geom_point(mapping = aes(y = p),size = 6,pch = 1,col = 'red') + theme_minimal() + theme(text = element_text(size = 25),plot.title = element_text(size = 30)) + labs(title = '成功確率 p') + scale_x_continuous(breaks = pretty_breaks(length(x0)))
+g
+
+# 二値確率変数 M の作成。
+set.seed(20200526)
+M <- as.vector(sapply(seq(10),function(i)rbinom(n = length(x0),size = 1,prob = p)))
+M
+length(M)
+
+# 誤差構造を二項分布、リンク関数をロジットとした一般化線形モデルを解きます。
+x <- rep(x0,10)
+glmg <- ggplot(mapping = aes(x = x,y = M)) + theme_minimal() + geom_point(pch = 1,size = 3,position = position_jitter(w = 0.0,h = 0.05)) + geom_smooth(size = 2,method = "glm", method.args = list(family = binomial(link = "logit")),se = T) + theme(text = element_text(size = 25),plot.title = element_text(size = 20)) + scale_x_continuous(breaks = pretty_breaks(n = length(unique(x)))) + labs(title = '誤差構造を二項分布、リンク関数をロジットとした一般化線形モデル')
+glmg
+
+# 推定されたパラメータを確認します。
+model <- glm(M ~ x,family = binomial(link = "logit"))
+summary(model)
+# 係数は有意。
+signifdigits <- 7
+a <- model$coefficients[2] %>% as.numeric() %>% signif(signifdigits)
+b <- model$coefficients[1] %>% as.numeric() %>% signif(signifdigits)
+a
+b
+
+# 以降、推定されたロジスティック回帰係数(a、b)による成功確率他。
+# 成功確率
+1/(1+exp(-(b+a*x0)))
+g + geom_point(mapping = aes(y = 1/(1+exp(-(b+a*x0)))),pch = 2,size = 6,col = 'blue')
+glmg + geom_point(mapping = aes(x=x0, y = 1/(1+exp(-(b+a*x0)))),pch = 2,size = 6,col = 'blue')
+# 青色三角が推定された回帰係数による成功確率。
+
+# オッズ
+# x = 5の場合
+x <- 5
+p1 <- 1/(1+exp(-(b+a*x)))
+p1
+p1/(1-p1)
+# オッズは0.510
+
+# x = (5 + 1)の場合(xを1だけ増加させた場合)
+x <- x + 1
+p2 <- 1/(1+exp(-(b+a*x)))
+p2
+p2/(1-p2)
+# オッズは1.320
+
+# オッズ比
+odds_ratio <- {p2/(1-p2)/(p1/(1-p1))} %>% signif(signifdigits)
+odds_ratio
+
+# xが1だけ増加するとオッズは2.59倍。
+
+# 検算します。
+{exp(a) %>% signif(signifdigits)} == odds_ratio
+# 係数aの指数関数はオッズ比と一致。
+
+# 同じことですが対数オッズ比で検算します。
+log_odds_ratio <- log(odds_ratio) %>% signif(signifdigits)
+log_odds_ratio
+log_odds_ratio == a
+# オッズ比の自然対数は係数aに一致。
+
+# 以上です。ロジスティック回帰の解釈を確認しました。ご視聴ありがとうございました。
+```
