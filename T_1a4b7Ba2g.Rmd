@@ -1,0 +1,81 @@
+```{r}
+# https://youtu.be/T_1a4b7Ba2g
+
+# ポアソン回帰の解釈を確認します。
+# 以降、有意水準は全て5%とします。
+# 参考資料
+# 1 https://www.slideshare.net/logics-of-blue/2-3glm
+# 2 https://stats.biopapyrus.jp/glm/poisson-regression.html
+# 3 https://bellcurve.jp/statistics/course/6984.html
+# 4 https://oku.edu.mie-u.ac.jp/~okumura/stat/poisson_regression.html
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr','ggplot2','gridExtra','scales')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+Sys.Date();version$version.string;rstudioapi::versionInfo()$version
+```
+
+```{r}
+# ポアソン回帰(一般化線形モデル)
+# 確率分布:ポアソン分布
+# リンク関数:応答変数に対数関数を適用
+# 線形予測子:beta + alpha * x
+# ポアソン分布:0以上の離散整数値確率変数=カウントデータ
+```
+
+$$
+{\rm log} (Y) = \beta + \alpha x,\
+Y = {\rm exp}[\beta+\alpha x]\\
+Y \sim {\rm Poisson}(y|{\rm exp}[\beta + \alpha x ]),\
+{\rm Poisson}(y| \lambda) = \frac{e^{-\lambda} \cdot \lambda^y}{y!}
+$$
+
+```{r}
+# パラメータλ毎にポアソン分布の形状を幾つか確認します。
+lambda <- c(1,5,10,30)
+sapply(lambda,function(x)rpois(n = 500,lambda = x)) %>% data.frame() %>% {colnames(.) <- paste0('λ=',lambda);.} %>% tidyr::gather(factor_key = T) %>% ggplot(data = .) + geom_histogram(binwidth = 1,mapping = aes(x = value,fill = key),col = 'white') + facet_wrap(facets = key~.,scales = 'free') + theme_minimal() + theme(legend.position = 'none',axis.title.x = element_blank(),text = element_text(size = 20),strip.text = element_text(size = 30))
+```
+
+```{r}
+# サンプルを作成します。
+# なお目的変数作成の係数(a0,b0,lambda0)に意味はありません。
+x <- seq(from = 5,to = 35,by = 1);x
+a0 <- 0.1
+b0 <- 0.5
+y0 <- exp(b0+a0*x);y0
+# 離散カウントデータを目的変数とします。
+set.seed(20200527)
+lambda0 <- 5
+y <- round(y0 + rpois(n = length(x),lambda = lambda0));y
+ggplot() + theme_minimal() + geom_point(mapping = aes(x = x,y = y),size = 5) + theme(text = element_text(size = 30))
+
+# 誤差構造をポアソン分布、リンク関数を対数関数として一般化線形モデルを解きます。
+model <- glm(y ~ x,family = poisson(link = "log"))
+cat('\014')
+summary(model)
+# 有意な係数
+
+# ポアソン回帰のカーブを描きます。
+ggplot(mapping = aes(x = x,y = y)) + geom_point(size = 5) + theme_minimal() + theme(text = element_text(size = 30)) + geom_smooth(size = 1,method = "glm", method.args = list(family = poisson(link = "log")),se = T)
+
+# 推定された係数aの解釈を確認します。
+
+# 推定された係数を取り出します。
+b <- model$coefficients[1]
+a <- model$coefficients[2]
+a;b
+
+# その時のy(目的変数)の推定量を確認します。
+y_hat <- exp(b + a*x);y_hat
+
+# xが1増加すると
+{tail(y_hat,-1)/head(y_hat,-1)} %>% signif(digits = 6) %>% unique()
+# yは 1.07357 倍。
+
+# 係数aの指数関数は、
+exp(a) %>% signif(digits = 6)
+# 同じく 1.07357 となります。
+
+# 以上です。ポアソン回帰の解釈を確認しました。ご視聴ありがとうございました。
+```
