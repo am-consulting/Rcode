@@ -1,0 +1,135 @@
+```{r}
+# https://youtu.be/Zjp549PXx84
+
+#【R & RStudio Tips】ggplotで表示される一般化線形モデルの回帰線とその信頼区間の数値を確認。誤差構造:二項分布、リンク関数:ロジット関数
+# 今回はggplotで表示されます一般化線形モデルの回帰線とその信頼区間の数値を確認します。誤差構造:二項分布、リンク関数:ロジット関数の場合とします。
+graphics.off();cat('\014')
+Sys.Date()
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr','ggplot2','knitr','kableExtra')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+rstudioapi::versionInfo()$version
+
+# サンプルデータは mtcars を利用します。
+cat('\014')
+mtcars %>% kable() %>% kable_styling(font_size = 20)
+
+# 以降、信頼水準は全て次の通りとします。
+cl <- 0.05
+
+# 誤差構造を二項分布、リンク関数をロジット関数、説明変数をwt、目的変数をamとして一般化線形モデルでの回帰線を信頼区間付きで表示します。
+link <- 'logit'
+g <- ggplot(data = mtcars,mapping = aes(x = wt, y = am))
+g <- g + geom_point()
+g <- g + geom_smooth(method = "glm",method.args = list(family = binomial(link = link)),se = T,level = 1-cl)
+g
+
+# 今回は青の回帰線とグレイの信頼区間の数値を確認します。
+```
+
+```{r}
+# 一般化線形モデルを作成します。
+model <- glm(am ~ wt,data = mtcars,family = binomial(link = link))
+
+# 結果はこちらです。
+cat('\014')
+model %>% summary
+family(model)
+confint(model,level = 1-cl)
+
+# 有意な係数が現れています。
+
+# サンプルデータwtの最小値と最大値の間で説明変数wtを100点用意します。
+newdata <- data.frame(wt = seq(min(mtcars$wt),max(mtcars$wt),length = 100))
+cat('\014')
+newdata %>% kable(row.names = T) %>% kable_styling(font_size = 20)
+
+# それぞれの点で上記モデルによる目的変数の推定値を関数predictにより求めます。
+# type = "response"とすることで回帰線の数値が直接取り出せますが此処では線形予測での結果を返します。
+predict_result <- predict(object = model,newdata = newdata,type = 'link',se.fit = T,level = 1-cl)
+cat('\014')
+predict_result
+
+# 結果を上で作成しました説明変数100点と結合します。
+newdata$fit <- predict_result$fit
+newdata$se <- predict_result$se.fit
+newdata %>% kable(row.names = T) %>% kable_styling(font_size = 20)
+
+# 線形予測で求めた目的変数の推定値になります。
+
+# 次の関数で線形予測の結果を目的変数amの期待値に変換します。
+calc_p <- function(x){
+  # ロジット関数の逆関数
+   p <- exp(x)/(1 + exp(x))
+   return(p)
+}
+```
+
+$$
+\begin{eqnarray}
+
+y &=& \textrm {log} \dfrac{p}{1-p}\\
+e^y &=& \dfrac {p}{1-p}\\
+p &=& e^y-e^yp\\
+e^y &=& p + e^yp = p(1+e^y)\\
+p &=& \dfrac{e^y}{1+e^y}
+
+\end{eqnarray}
+$$
+
+```{r}
+# 推定された目的変数amは4列目です。
+newdata$fit_logit <- newdata$fit %>% calc_p()
+newdata %>% kable() %>% kable_styling(font_size = 20)
+
+# 線形予測時点では正規分布を仮定しています。
+cval <- qnorm(1-cl/2);cval
+
+# 上側、下側の信頼区間を求めます。
+newdata$fit_logit_upper <- {newdata$fit + cval*newdata$se} %>% calc_p()
+newdata$fit_logit_lower <- {newdata$fit - cval*newdata$se} %>% calc_p()
+newdata %>% kable(row.names = T) %>% kable_styling(font_size = 20)
+
+# ggplotで作成したチャートにそれぞれの点を重ねます。
+# 赤点が求めた数値です。
+
+# 回帰線
+g + geom_point(data = newdata,mapping = aes(x = wt,y = fit_logit),color = 'red')
+
+# 重なります。
+
+# 信頼区間上側
+g + geom_point(data = newdata,mapping = aes(x = wt,y = fit_logit_upper),color = 'red')
+
+# 重なります。
+
+# 信頼区間下側
+g + geom_point(data = newdata,mapping = aes(x = wt,y = fit_logit_lower),color = 'red')
+
+# 全て重なります。
+
+# なお関数predictを用いずとも回帰線の数値は以下の通りに取り出せます。
+liner_y <- model$coefficients[2]*newdata$wt+model$coefficients[1]
+y_hat <- exp(liner_y)/(1+exp(liner_y))
+g + geom_point(data = newdata,mapping = aes(x = newdata$wt,y = y_hat),color = 'red')
+
+# 重なります。
+
+# 以上です。今回はggplotで表示される一般化線形モデルの回帰線とその信頼区間を確認しました。ご視聴ありがとうございました。
+
+# 引用参考資料
+# https://www.slideshare.net/logics-of-blue/2-3glm
+# https://stats.biopapyrus.jp/glm/logit-regression.html
+# http://cse.naro.affrc.go.jp/yamamura/Images/kenshuu_slide_glm_2017.pdf
+# http://faculty.washington.edu/eliezg/teaching/StatR201/VisualizingPredictions.html
+# https://jp.mathworks.com/help/stats/examples/fitting-data-with-generalized-linear-models.html
+# http://faculty.washington.edu/eliezg/teaching/StatR201/VisualizingPredictions.html
+# https://www.jstage.jst.go.jp/article/weed/55/4/55_4_268/_pdf
+# https://fromthebottomoftheheap.net/2018/12/10/confidence-intervals-for-glms/
+# https://stats.stackexchange.com/questions/41074/prediction-with-ci-predict-glm-doesnt-have-interval-option
+# https://stackoverflow.com/questions/14423325/confidence-intervals-for-predictions-from-logistic-regression
+# https://stackoverflow.com/questions/48331543/transform-family-link-functions-in-glm-predictions-in-r
+```
