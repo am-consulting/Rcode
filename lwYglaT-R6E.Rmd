@@ -1,0 +1,117 @@
+```{r}
+# https://youtu.be/lwYglaT-R6E
+
+# 今回はRの関数adf.test {tseries}で利用されていますcritical value(臨界値)を手作業で確認します。
+
+# 参考引用資料/Bibliographyは以下のとおりです。
+# 1  WAYNE A. FULLER『Introduction to Statistical Time Series(Second Edition)』
+# 2  David A. Dickey and Wayne A. Fuller『Distribution of the Estimators for Autoregressive Time Series With a Unit Root』
+# 3  Kerry Patterson『Unit Root Tests in Time Series Volume 1: Key Concepts and Problems』
+# 4  Kerry Patterson『Unit Root Tests in Time Series Volume 2: Extensions and Developments』
+# 5  Kerry Patterson『A Primer for Unit Root Testing』
+# 6  村尾博『Rで学ぶVAR実証分析』
+# 7  https://faculty.washington.edu/ezivot/econ584/notes/unitroot.pdf
+# 8  https://www-cc.gakushuin.ac.jp/~20130021/ecmr/chap7.pdf
+# 9  https://stats.stackexchange.com/questions/213551/how-is-the-augmented-dickey-fuller-test-adf-table-of-critical-values-calculate/213589
+# 10 https://stats.stackexchange.com/questions/224084/dickey-fuller-unit-root-test-with-no-trend-and-supressed-constant-in-stata/224249
+
+# 必要なパッケージを読み込みます。
+pkgs <- c('dplyr','tseries')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+rstudioapi::versionInfo()$version
+Sys.Date()
+
+# 始めに関数adf.testで利用されています臨界値を確認します。
+cat('\014');adf.test
+
+# ソースコードから臨界値を取り出してデータフレームとします。
+#####
+table <- cbind(c(4.38, 4.15, 4.04, 3.99, 3.98, 3.96), c(3.95, 
+        3.8, 3.73, 3.69, 3.68, 3.66), c(3.6, 3.5, 3.45, 3.43, 
+        3.42, 3.41), c(3.24, 3.18, 3.15, 3.13, 3.13, 3.12), c(1.14, 
+        1.19, 1.22, 1.23, 1.24, 1.25), c(0.8, 0.87, 0.9, 0.92, 
+        0.93, 0.94), c(0.5, 0.58, 0.62, 0.64, 0.65, 0.66), c(0.15, 
+        0.24, 0.28, 0.31, 0.32, 0.33))
+table <- -table
+tablen <- dim(table)[2]
+tableT <- c(25, 50, 100, 250, 500, 1e+05)
+tablep <- c(0.01, 0.025, 0.05, 0.1, 0.9, 0.95, 0.975, 0.99)
+#####
+colnames(table) <- tablep
+row.names(table) <- tableT
+cat('\014');table
+# 列名は有意水準、行名がサンプルサイズです。
+
+# こちらの臨界値は次の資料のドリフト項およびトレンド項ありの臨界値表とほぼ同じです。
+# WAYNE A. FULLER『Introduction to Statistical Time Series(Second Edition)』(以降"臨界値原本")の642ページの最下段の表。
+# adf.test {tseries}のヘルプにも『The general regression equation which incorporates a constant and a linear trend』とあり、同関数はドリフト項およびトレンド項ありの場合の検定となります。
+
+# 今回はこちらの関数中の臨界値表のうち最下段、サンプルサイズが100,000(臨界値原本では∞)の場合の臨界値を手作業で算出します。
+# なお臨界値は乱数を利用したシミュレーションによりますので臨界値原本や関数中の臨界値とは誤差が生じます。
+
+# 単位根検定とは次の帰無仮説が棄却されるか否かの検定です。
+```
+
+$$
+【ドリフト項およびトレンド項あり】\\
+\rm{H_0}:\rho=1\\
+\Delta y_t = \beta_1+\beta_2t+\rho y_{t-1}+\sum_{i=1}^{p-1}\gamma_i \Delta y_{t-i}+u_t
+$$
+```{r}
+# 検定統計量DFの帰無分布を求めるためのブラウン運動によるシミュレーションの数式は次のとおりです。
+```
+
+$$
+【検定統計量の分布(ドリフト項、トレンド項あり)】\\
+(ブラウン運動のシミュレーションによる)\\
+\quad\hat\rho:LSE(最小二乗推定値)\,,W(t):標準ブラウン運動\\
+\begin{align*}
+検定統計量\, \rm{DF}_{\tau}& = \frac{\hat{\rho}-1}{s.e.(\hat{\rho})}\\
+\rm{DF}_{\tau}(\rho=1) &\rightarrow \frac{\int_0^1W(r)dW(r)}{\{\int_0^1W^2(r)dr\}^{1/2}} = \frac{1/2\{W(1)^2-W(0)^2-1\}}{\{\int_0^1W^2(r)dr\}^{1/2}}\\
+\end{align*}\\
+W^\tau(r)= W(r)+(6r-4)\int_0^1W(s)ds-(12r-6)\int_0^1sW(s)ds
+$$
+
+```{r}
+# 上記シミュレーションをコード化します。
+# なおコードはBibliography 9,10からの引用(部分変更あり)です。
+set.seed(2020092301)
+
+# 時点0から時点1までの積分を下記Tポイントの数値解析で近似します。
+T <- 5000
+
+# 検定統計量DFの帰無分布を求めるためのシミュレーション回数は下記repsとします。
+reps <- 50000
+
+# シミュレーション結果をDFstatsに保存します。
+DFstats <- rep(NA,reps)
+
+# 時点0から時点1までを上記Tの数だけ分割したポイントを作成します。
+s <- seq(0,1,length.out = T)
+
+# シミュレーションを実行します。
+for (i in 1:reps){
+  u <- rnorm(n = T,mean = 0,sd = 1)
+  W <- 1/sqrt(T)*cumsum(u)
+  W_tau <- W + (6*s-4)*mean(W) - (12*s-6)*mean(s*W)
+  DFstats[i] <- (W_tau[T]^2-W_tau[1]^2-1)/(2*sqrt(mean(W_tau^2)))
+}
+
+# DFstatsを昇順に並べ替えて検定統計量(ρ=1)の帰無分布を求め、各有意水準での臨界値を求めます。
+# 帰無分布
+sort(DFstats) %>% plot()
+
+cat('\014')
+# 臨界値一覧
+CriticalValues <- sort(DFstats)[tablep*reps] %>% round(.,2)
+rbind(CriticalValues,tail(table,1))
+# 下段がadf.test {tseries}で利用していますサンプルサイズが100,000の場合の臨界値です。
+# 比較しますとほぼ同一の結果が得られています。
+
+# 参考として検定統計量DFstatsのヒストグラムを確認します。
+hist(DFstats,breaks = seq(-6,1.5,0.25))
+
+# 以上です。ご視聴ありがとうございました。
+```
