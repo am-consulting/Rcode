@@ -1,0 +1,108 @@
+```{r}
+# https://youtu.be/brGtYw17IUI
+
+# 今回は単位根検定に際してのモデル選定の影響を確認します。
+# 参考引用文献
+# 村尾博(2019),『Rで学ぶVAR実証分析』,オーム社.
+
+# 必要な関数を読み込みます。
+graphics.off();cat('\014')
+pkgs <- c('CADFtest')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+rstudioapi::versionInfo()$version
+Sys.Date()
+
+# 以降、有意水準は5%とします。
+```
+
+$$
+単位根検定とは以下のモデルの下での帰無仮説の検定です。*\rm{trend}モデルの場合を例とします\\
+\rm{H_0}:\rho=1,\quad \rho-1=0\quad 単位根あり\\
+\rm{H_1}:\rho<1,\quad \rho-1<0\quad 単位根なし\\
+\begin{eqnarray}
+y_t&=&c_1+c_2t+v_t\\
+v_t&=&\rho y_{t-1}+u_t\\
+y_t&=&c_1 + c_2t + \rho[y_{t-1}-c_1-c_2(t-1)]+u_t\\
+&=&c_1+c_2t+\rho y_{t-1}-\rho c_1-\rho c_2t+\rho c_2+u_t \\
+&=&c_1(1-\rho)+\rho c_2+c_2t(1-\rho)+\rho y_{t-1}+u_t\\
+&=&\beta_1+\beta_2t+\rho y_{t-1}+u_t\\
+y_t-y_{t-1}&=&\beta_1+\beta_2t+\rho y_{t-1}+u_t-y_{t-1}\\
+\Delta y_t&=&\beta_1+\beta_2t+(\rho-1) y_{t-1}+u_t\\
+&&この変形によって係数(\rho-1)が0か否かの検定となり、線形回帰検定が利用できます。\\
+&&系列相関の影響を除去するために\sum_{i=1}^{p-1}\gamma_i \Delta y_{t-i}を加えます。\\
+\Delta y_t&=&\beta_1+\beta_2t+(\rho-1) y_{t-1}+ \sum_{i=1}^{p-1}\gamma_i \Delta y_{t-i} + u_t\\
+ここで\\
+u_t&:&定常過程\\
+c_1&:&ドリフト項\\
+c_2t&:&トレンド項\\
+c_1+c_2t&:&タイムトレンド成分\\
+y_t&:&トレンド定常過程\\
+\beta_1&=&c_1(1-\rho)+\rho c_2\\
+\beta_2&=&c_2(1-\rho)\\
+&1&検定統計量(\tau検定統計量、t検定統計量)は\tau=\frac{\hat\rho-1}{\hat\sigma_p}\\
+&2&上記モデルで係数\rho=1が有意であるか否かの検定です。*棄却ならば\rho\geq1も当然棄却。\\
+&3&係数\rhoが1または1未満であるかの検定ですので左片側検定(下側確率)となります。\\
+&4&\beta_1と\beta_2tはタイムトレンドの影響を除去\\
+&5&係数\rho=1の場合、そのデータ生成過程はランダムウォーク(c_1,c_2が0の場合)となります。\\
+\end{eqnarray}
+$$
+```{r}
+# 係数が「イコール1」または「1未満」の場合の時系列データをチャートで確認してみます。
+fun_plot <- function(n,c1,c2,rho,sd){
+  y <- vector()
+  y[1] <- 0
+  for(t in 1:n){
+    y[t+1] <- c1 + c2*t + rho*y[t] + rnorm(n = 1,sd = sd)
+  }
+  plot(y,type = 'o')
+  return(y)
+}
+
+# サンプルサイズ等は以下の通りとします。
+set.seed(20201011)
+n <- 99;c1 <- 1;c2 <- 10^-3;sd <- 10
+
+# 係数が1の場合
+y <- fun_plot(n = n,c1 = c1,c2 = c2,rho = 1.0,sd = sd)
+# 時系列データは発散します。
+
+# 係数が1未満の場合
+y <- fun_plot(n = n,c1 = c1,c2 = c2,rho = 0.95,sd = sd)
+# 発散しません。
+
+# 単位根検定のモデルには「trendモデル」「driftモデル」「noneモデル」の3つのモデルがあり、
+# trendモデルはドリフト項あり、トレンド項あり。
+# driftモデルはドリフト項あり、トレンド項なし。
+# noneモデルはドリフト項なし、トレンド項なし。
+
+# ここで「タイムトレンド成分なし(ドリフト項およびトレンド項を含まない)」かつ「係数が1未満(単位根なし)」の時系列データを生成します。
+
+y <- fun_plot(n = n,c1 = 0,c2 = 0,rho = 0.9,sd = sd)
+
+# noneモデルで単位根検定をとりますと、 
+cat('\014');CADFtest(model = y,type = 'none',max.lag.y = 0)
+
+# 単位根過程は棄却されます。
+
+# しかしその他のモデルで検定をとりますと、
+# 始めにtrendモデル
+cat('\014');CADFtest(model = y,type = 'trend',max.lag.y = 0)
+
+# 棄却されません。
+
+# 続いてdriftモデル
+cat('\014');CADFtest(model = y,type = 'drift',max.lag.y = 0)
+
+# こちらも棄却されません。
+
+# adf.test {tseries}はtrendモデルのみですので、
+adf.test(x = y,k = 0)
+
+# 棄却されません。
+
+# 時系列データの定常、非定常、単位根なし、単位根ありを安易に判断することはできない、というお話でした。
+
+# 以上です。ご視聴ありがとうございました。
+```

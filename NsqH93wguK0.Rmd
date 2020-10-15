@@ -1,0 +1,125 @@
+```{r}
+# https://youtu.be/NsqH93wguK0
+
+# 今回は以下に示しています3つの単位根検定(*)モデルのうちnoneモデルのtau検定統計量を確認します。
+# *ここではADF検定とします。
+# 参考引用文献
+# 村尾博(2019),『Rで学ぶVAR実証分析』,オーム社.
+```
+
+$$
+\begin{eqnarray}
+&1 &\rm{trend}モデル &\, ドリフト項あり、トレンド項あり \,\rm{H_0}:単位根あり\\ 
+&2 &\rm{drift}モデル &\, ドリフト項あり、トレンド項なし \,\rm{H_0}:単位根あり\\
+&3 &\rm{none}モデル  &\, ドリフト項なし、トレンド項なし \,\rm{H_0}:単位根あり\\
+\end{eqnarray}
+$$
+
+```{r}
+# 必要なパッケージを読み込みます。
+graphics.off();cat('\014')
+pkgs <- c('dplyr','quantmod','knitr','kableExtra','tibble','urca','tseries','CADFtest')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+rstudioapi::versionInfo()$version
+Sys.Date()
+```
+
+```{r}
+# 今回はサンプルとして月次のドル円レートを利用します。
+getSymbols(Symbols = 'EXJPUS',src = 'FRED')
+plot(EXJPUS)
+EXJPUS %>% index() %>% range()
+EXJPUS %>% tail()
+```
+
+```{r}
+# そのうち2020年9月迄の120ヶ月分をサンプルとします。
+sampledata <- EXJPUS %>% index() %>% {.<=as.Date('2020-9-1')} %>% EXJPUS[.,] %>% tail(120)
+sampledata %>% plot()
+# こちらの時系列データの単位根検定統計量を求めます。
+```
+
+```{r}
+cat('\014');y <- sampledata %>% as.vector();y
+```
+
+```{r}
+# 単位根検定統計量算出のための関数です。
+fun_test_statistic_of_adf <- function(y,p,drift=T,trend=T,without_ylag1_term=F){
+  df0 <- y %>% data.frame()
+  colnames(df0) <- 'y_t'
+  df1 <- df0 %>% add_column(t = seq(nrow(df0)),.before = 1)
+  df1$`y_{t-1}` <- head(df1$y_t,-1) %>% c(NA,.)
+  diff <- df1$y_t %>% diff(lag = 1,differences = 1)
+  df2 <- cbind(df1, embed(diff,p+1) %>% rbind(matrix(nrow = p+1,ncol = p+1),.))
+  colnames(df2)[4:(4+p)] <- c(0,seq(p)) %>% paste0('Δy_{t-',.,'}')
+  df <- df2 %>% na.omit()
+  if(trend){
+    col_explanatory_variable <- c(1,3,5:ncol(df))
+    if(without_ylag1_term){
+      col_explanatory_variable <- c(1,5:ncol(df))
+    }
+  }else{
+    col_explanatory_variable <- c(3,5:ncol(df))
+    if(without_ylag1_term){
+      col_explanatory_variable <- c(5:ncol(df))
+    }
+  }
+  adf_model <- paste0('`',df[,4,drop=F] %>% colnames(),'`~',  df[,col_explanatory_variable] %>% colnames() %>% paste0('`',.,'`',collapse = '+'),ifelse(drift,'+1','+0')) %>% eval()
+  result_lm <- lm(formula = adf_model,df)
+  return(list(df1=df1,df2=df2,df=df,adf_model=adf_model,result_lm=result_lm))
+}
+```
+
+```{r trend-tau}
+# 以下に示していますtrendモデルのtau検定統計量を求めます。
+# ラグ次数pを4、ドリフト項あり、トレンド項ありとします。
+p <- 4
+result <- fun_test_statistic_of_adf(y = y,p = p,drift = T,trend = T)
+
+# 結果を確認します。
+result$df2 %>% kable() %>% kable_styling()
+```
+
+$$
+\Delta y_t=\beta_1+\beta_2t+(\rho-1) y_{t-1}+ \sum_{i=1}^{p-1}\gamma_i \Delta y_{t-i} + u_t\\
+$$
+```{r trend-tau}
+# それぞれの対応は、
+# モデル左辺 目的変数:4列目
+# モデル右辺 第2項   :1列目
+# モデル右辺 第3項   :3列目
+# モデル右辺 第4項   :5-8列目 *系列相関の影響を除去
+
+# NA行を削除した結果を表示します。
+result$df %>% kable(row.names = F) %>% kable_styling()
+
+# 線形回帰のモデルを確認します。
+cat('\014');result$adf_model
+# ドリフト項およびトレンド項ありです。
+
+# 線形回帰の結果を確認します。
+cat('\014');result$result_lm %>% summary()
+
+# yのラグ1、y_{t-1}の係数のみを抜き出します
+ylag1_row <- 3
+cat('\014');result$result_lm %>% summary() %>% {.$coefficients[ylag1_row,,drop=F]}
+
+# tau検定統計量はt値、-1.320472 です。
+
+# Rの関数を利用した結果と照合します。
+# adf.test {tseries}
+adf.test(x = y,k = p)$statistic
+
+# CADFtest {CADFtest}
+CADFtest(model = y,type = 'trend',max.lag.y = p)$statistic
+
+# ur.df {urca}
+ur.df(y = y,type = 'trend',lags = p) %>% summary()
+
+# 同一のtau検定統計量であることが確認できました。
+
+# 以上です。ご視聴ありがとうございました。
+```
