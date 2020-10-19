@@ -1,0 +1,131 @@
+```{r}
+# https://youtu.be/9_eTR9N0rpQ
+
+# 今回はモンテカルロ法によりADF単位根検定におけるtau検定統計量の帰無分布を確認します。
+# 対象モデルはnoneモデル。
+# ドリフト項なし、トレンド項なし
+```
+
+$$
+\Delta y_t=(\rho-1) y_{t-1}+ \sum_{i=1}^{p-1}\gamma_i \Delta y_{t-i} + u_t\\
+$$
+
+```{r}
+# 必要なパッケージを読み込みます。
+graphics.off();cat('\014')
+pkgs <- c('dplyr','tibble','CADFtest')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+rstudioapi::versionInfo()$version
+Sys.Date()
+```
+
+```{r}
+# 検定統計量を算出する関数です。
+fun_test_statistic_of_adf <- function(y,p,drift=T,trend=T,without_ylag1_term=F){
+  # 原系列
+  df0 <- y %>% data.frame()
+  colnames(df0) <- 'y_t'
+  #トレンド項追加
+  df1 <- df0 %>% add_column(t = seq(nrow(df0)),.before = 1)
+  # ラグ1項追加
+  df1$`y_{t-1}` <- head(df1$y_t,-1) %>% c(NA,.)
+  # 一階差分系列の作成
+  diff <- df1$y_t %>% diff(lag = 1,differences = 1)
+  # 系列相関の影響を除去するための項を追加
+  df2 <- cbind(df1, embed(diff,p+1) %>% rbind(matrix(nrow = p+1,ncol = p+1),.))
+  # 差分系列の列名設定
+  # 4列目は目的変数
+  colnames(df2)[4:(4+p)] <- {if(0<p){c(0,seq(p))}else{0}} %>% paste0('Δy_{t-',.,'}')
+  # NA行削除
+  df <- df2 %>% na.omit()
+  # 説明変数とする列を設定
+  col_explanatory_variable <- NULL
+  col_explanatory_variable <- if(0<p){5:ncol(df)}
+  if(!without_ylag1_term)col_explanatory_variable <- c(3,col_explanatory_variable)
+  if(trend)col_explanatory_variable <- c(1,col_explanatory_variable)
+  # 線形回帰
+  adf_model <- result_lm <- NULL
+  if(!is.null(col_explanatory_variable)){
+    adf_model <- paste0('`',df[,4,drop=F] %>% colnames(),'`~',  df[,col_explanatory_variable,drop=F] %>% colnames() %>% paste0('`',.,'`',collapse = '+'),ifelse(drift,'+1','+0')) %>% eval()
+    result_lm <- lm(formula = adf_model,df)
+  }
+  return(list(df1=df1,df2=df2,df=df,adf_model=adf_model,result_lm=result_lm,col_explanatory_variable=col_explanatory_variable))
+}
+```
+
+```{r}
+# 帰無分布作成の前にCADFtest {CADFtest}の結果と上記関数の結果を照合します。
+y <- rnorm(n = 100) %>% cumsum()
+# ラグ次数pを3とした場合
+CADFtest(model = y,type = 'none',max.lag.y = 3)$statistic
+result_adf <- fun_test_statistic_of_adf(y = y,p = 3,drift = F,trend = F,without_ylag1_term = F)
+result_adf$adf_model
+result_adf$result_lm %>% summary() %>% {.$coef[1,]}
+# 検定統計量は同一です。
+
+# ラグ次数pを0とした場合
+CADFtest(model = y,type = 'none',max.lag.y = 0)$statistic
+result_adf <- fun_test_statistic_of_adf(y = y,p = 0,drift = F,trend = F,without_ylag1_term = F)
+result_adf$adf_model
+result_adf$result_lm %>% summary() %>% {.$coef[1,]}
+# こちらも検定統計量は同一です。
+```
+
+```{r}
+# 今回は以下の2種の帰無分布を確認します。
+# 1つはサンプルサイズを 25 とする場合
+# もう1つはサンプルサイズを 250 とする場合
+```
+
+```{r}
+# 帰無分布はWAYNE A. FULLER『Introduction to Statistical Time Series(Second Edition)』の642ページの表(以降"Dickey–Fullerテーブル")と照合します。
+# 今回はnoneモデルですので最上段の表が対象です。
+```
+
+```{r}
+# 帰無分布作成のための関数です。
+fun_MonteCarlo <- function(samplesize,reps,p,drift=T,trend=T){
+  df <- vector()
+  for(iii in 1:reps){
+    buf0 <- fun_test_statistic_of_adf(y = rnorm(n = samplesize) %>% cumsum(),p = p,drift = drift,trend = trend)
+    buf1 <- buf0$result_lm %>% summary()
+    df[iii] <- buf1$coefficients[drift+trend+1,3]
+  }
+  sort(df) %>% plot()
+  tablep <- c(0.01, 0.025, 0.05, 0.1, 0.5, 0.9, 0.95, 0.975, 0.99)
+  beepr::beep(sound = 11)
+  cv <- sort(df)[tablep*reps] %>% round(.,2) %>% matrix(nrow = 1)
+  colnames(cv) <- tablep
+  return(cv)
+}
+```
+
+```{r}
+# それでは2種のサンプルサイズで帰無分布を作成します。
+```
+
+```{r}
+cat('\014')
+# サンプルサイズを25とする場合
+samplesize <- 25
+reps <- 50000
+p <- 0
+drift <- F
+trend <- F
+fun_MonteCarlo(samplesize = samplesize,reps = reps,p = p,drift = drift,trend = trend)
+
+# Dickey–Fullerテーブルの最上段のnoneモデルのサンプルサイズ25と比較しますと、ほぼ同一です。
+```
+
+```{r}
+cat('\014')
+# サンプルサイズを250とする場合
+samplesize <- 250
+fun_MonteCarlo(samplesize = samplesize,reps = reps,p = p,drift = drift,trend = trend)
+
+# Dickey–Fullerテーブルの最上段のnoneモデルのサンプルサイズ250と比較しますと、ほぼ同一です。
+
+# 以上です。ご視聴ありがとうございました。
+```
