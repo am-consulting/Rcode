@@ -1,0 +1,193 @@
+```{r}
+# https://youtu.be/HC6NQ1T4nC0
+
+# 今回は単位根過程=ランダムウォーク(タイムトレンドあり又はなし)のサンプルサイズを無限大とした場合の検定統計量の帰無分布を標準ブラウン運動への置換を利用して確認します。
+
+# 参考引用資料/Bibliographyは以下のとおりです。
+#  1 WAYNE A. FULLER『Introduction to Statistical Time Series(Second Edition)』
+#  2 David A. Dickey and Wayne A. Fuller『Distribution of the Estimators for Autoregressive Time Series With a Unit Root』
+#  3 Kerry Patterson『Unit Root Tests in Time Series Volume 1: Key Concepts and Problems』
+#  4 Kerry Patterson『Unit Root Tests in Time Series Volume 2: Extensions and Developments』
+#  5 Kerry Patterson『A Primer for Unit Root Testing』
+#  6 https://faculty.washington.edu/ezivot/econ584/notes/unitroot.pdf
+#  7 https://www-cc.gakushuin.ac.jp/~20130021/ecmr/chap7.pdf
+#  8 https://stats.stackexchange.com/questions/213551/how-is-the-augmented-dickey-fuller-test-adf-table-of-critical-values-calculate/213589
+#  9 https://stats.stackexchange.com/questions/224084/dickey-fuller-unit-root-test-with-no-trend-and-supressed-constant-in-stata/224249
+# 10 国友直人『構造変化と単位根・共和分仮説』日本銀行金融研究所/金融研究/1996.12
+# 11 森棟公夫『時系列分析の新展開』經濟論叢 (1995)
+# 12 蓑谷千凰彦『計量経済学大全』東洋経済新報社
+# 13 Robinson Kruse『A new unit root test against ESTAR based on a class of modified statistics』
+# 14 Fumio Hayashi『Econometrics』Princeton University Press
+# 15 Eric ZivotJiahui Wang『Modeling Financial Time Series with S-PLUS』Springer
+```
+
+```{r}
+# 必要なパッケージを読み込みます。
+graphics.off();cat('\014')
+pkgs <- c('dplyr')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+rstudioapi::versionInfo()$version
+Sys.Date()
+```
+
+```{r}
+# 以下は本ビデオのテーマに関する各種文献からの引用です。
+# 国友直人,『構造変化と単位根・共和分仮説』,日本銀行金融研究所/金融研究/1996.12,p.20.
+```
+
+$$
+\begin{eqnarray}
+&&『単位根が存在する場合にはランダム・ウォーク要素 \frac{1}{\sqrt{T}}\sum_{s=1}^{[tT]}\nu_sは\\
+&&漸近的(T\rightarrow+\infty)にブラウン運動\{B(t),0\leq t \leq 1 \}と呼ばれる\\
+&&連続確率過程に収束する。』
+\end{eqnarray}
+$$
+```{r}
+# 森棟公夫,『時系列分析の新展開』,經濟論叢 (1995),p.4
+```
+
+$$
+\begin{eqnarray}
+&&『和分過程の分析では乱数 u_iの和が出てくれば、\\
+&&標準偏差とTの平方根の積で割って漸近的に\\
+&&標準ブラウン運動に置き換える操作が頻繁に使われる。』\\
+&&\frac{1}{\sigma\sqrt{T}}\sum_{i=1}^m u_i \xrightarrow{D}B(r)
+\end{eqnarray}
+$$
+```{r}
+# 蓑谷千凰彦,『計量経済学大全』,東洋経済新報社,p.582
+```
+
+$$
+\begin{eqnarray}
+&&『有限標本のとき、\hat{\tau}、\hat{\tau_\mu}、\hat{\tau_\tau}分布の臨界点は\\
+&&モンテ・カルロ実験によって求めざるを得ない。』
+\end{eqnarray}
+$$
+```{r}
+# 帰無仮説が単位根あり(係数=1)の場合の検定統計量は次のとおりです。
+
+# Fumio Hayashi,『Econometrics』,Princeton University Press,p.575
+# Eric ZivotJiahui Wang,『Modeling Financial Time Series with S-PLUS』,Springer,pp.114-115
+# Kerry Patterson,『A Primer for Unit Root Testing』,Springer,pp.196-197
+# Kerry Patterson,『Unit Root Tests in Time Series Volume 1: Key Concepts and Problems』,Springer,p.208
+# Kerry Patterson,『Unit Root Tests in Time Series Volume 2: Extensions and Developments』,Palgrave Macmillan,p.65
+# https://stats.stackexchange.com/questions/213551/how-is-the-augmented-dickey-fuller-test-adf-table-of-critical-values-calculate/213589
+# https://stats.stackexchange.com/questions/224084/dickey-fuller-unit-root-test-with-no-trend-and-supressed-constant-in-stata/224249
+```
+
+$$
+t\xrightarrow{d}\frac{\frac{1}{2}(W(1)^2-1)}{\sqrt{\int_0^1W(r)^2dr}}\equiv DF_t\\
+$$
+```{r}
+# その上でtrendモデル、driftモデル、noneモデルの帰無分布を求める数式は次のとおりです。
+```
+
+$$
+\begin{eqnarray}
+W(r)&\equiv&\frac{1}{\sqrt{T}}\sum_{i=1}^T \rm{N(0,1)} \\
+W^\mu(r)&\equiv& W(r)-\int_0^1W(s)d s\\
+W^\tau(r)&\equiv& W(r)-(4-6r)\int_0^1W(s)d s-(12r-6)\int_0^1sW(s)d s\\
+\end{eqnarray}
+$$
+```{r}
+# 上段がnoneモデル、中段がdriftモデル、下段がtrendモデル
+# Robinson Kruse,『A new unit root test against ESTAR based on a class of modified statistics』,p.4.
+# Fumio Hayashi,『Econometrics』,Princeton University Press,pp.568-570
+```
+
+```{r}
+# 上記モデルをコード化します。
+# なおコードは参考引用資料/Bibliography 8,9からの引用です。
+fun_null_distribution <- function(reps,T,DFstats,s,type){
+  for (i in 1:reps){
+    u <- rnorm(n = T,mean = 0,sd = 1)
+    W <- 1/sqrt(T)*cumsum(u)
+    # noneモデル
+    W_none <- W
+    # driftモデル、demeaned/平均値除去
+    W_mu <- W - mean(W)
+    # trendモデル、detrended/トレンド除去
+    W_tau <- W - (4 - 6*s)*mean(W) - (12*s - 6)*mean(s*W)
+    if(type=='none'){W <- W_none}
+    if(type=='drift'){W <- W_mu}
+    if(type=='trend'){W <- W_tau}
+    DFstats[i] <- (W[T]^2 - W[1]^2 - 1)/(2*sqrt(mean(W^2)))
+  }
+  return(DFstats)
+}
+```
+
+```{r}
+# シミュレーションを実行します。
+
+# 時点0から時点1までの積分を下記Tポイントの離散値で近似します。
+T <- 5000
+
+# 検定統計量の帰無分布を求めるためのシミュレーション回数は下記repsとします。
+reps <- 100000
+
+# 時点0から時点1までを上記Tの数だけ分割したポイントを作成します。
+s <- seq(0,1,length.out = T)
+
+# シミュレーション結果をDFstatsに保存します。
+# DFstatsを昇順に並べ替えて検定統計量(係数=1)の帰無分布を求め、各有意水準での臨界値を求めます。
+DFstats <- rep(NA,reps)
+
+# 臨界点
+tablep <- c(0.01, 0.025, 0.05, 0.1, 0.5, 0.9, 0.95, 0.975, 0.99)
+
+# 帰無分布はWAYNE A. FULLER『Introduction to Statistical Time Series(Second Edition)』の642ページの表(以降"Dickey–Fullerテーブル")と照合します。
+```
+
+```{r}
+# 始めにnoneモデルの帰無分布です。
+DFstats <- fun_null_distribution(reps = reps,T = T,DFstats = DFstats,s = s,type = 'none')
+sort(DFstats) %>% plot()
+
+cat('\014')
+# 臨界値一覧
+CriticalValues <- sort(DFstats)[tablep*reps] %>% round(.,2) %>% matrix(nrow = 1)
+colnames(CriticalValues) <- tablep
+CriticalValues
+# 比較しますとサンプルサイズ無限大の場合とほぼ同一の結果が得られています。
+
+# 参考として検定統計量DFstatsのヒストグラムを確認します。
+hist(DFstats,breaks = seq(min(DFstats) %>% floor(),max(DFstats) %>% ceiling(),0.1))
+```
+
+```{r}
+# 続いてdriftモデルの帰無分布です。
+DFstats <- fun_null_distribution(reps = reps,T = T,DFstats = DFstats,s = s,type = 'drift')
+sort(DFstats) %>% plot()
+
+cat('\014')
+# 臨界値一覧
+CriticalValues <- sort(DFstats)[tablep*reps] %>% round(.,2) %>% matrix(nrow = 1)
+colnames(CriticalValues) <- tablep
+CriticalValues
+# 比較しますとサンプルサイズ無限大の場合とほぼ同一の結果が得られています。
+
+# 参考として検定統計量DFstatsのヒストグラムを確認します。
+hist(DFstats,breaks = seq(min(DFstats) %>% floor(),max(DFstats) %>% ceiling(),0.1))
+```
+
+```{r}
+# 最後はtrendモデルの帰無分布です。
+DFstats <- fun_null_distribution(reps = reps,T = T,DFstats = DFstats,s = s,type = 'trend')
+sort(DFstats) %>% plot()
+
+cat('\014')
+# 臨界値一覧
+CriticalValues <- sort(DFstats)[tablep*reps] %>% round(.,2) %>% matrix(nrow = 1)
+colnames(CriticalValues) <- tablep
+CriticalValues
+# 比較しますとサンプルサイズ無限大の場合とほぼ同一の結果が得られています。
+
+# 参考として検定統計量DFstatsのヒストグラムを確認します。
+hist(DFstats,breaks = seq(min(DFstats) %>% floor(),max(DFstats) %>% ceiling(),0.1))
+
+# 以上です。ご視聴ありがとうございました。
+```
