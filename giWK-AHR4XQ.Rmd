@@ -1,0 +1,136 @@
+```{r}
+# https://youtu.be/giWK-AHR4XQ
+
+# 今回はRの関数egcm {egcm}による共和分検定の手順を確認します。
+# 参考引用文献
+# 村尾博(2019),『Rで学ぶVAR実証分析』,オーム社.
+```
+
+```{r}
+# 必要なパッケージを読み込みます。
+graphics.off();cat('\014')
+pkgs <- c('dplyr','egcm','tidyr','ggplot2','tibble','knitr','kableExtra','tseries')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+rstudioapi::versionInfo()$version
+Sys.Date()
+```
+
+```{r}
+# 関数egcmは「Engle-Granger Cointegration Model」のabbreviationでありエンゲル-グレンジャー共和分検定のための関数です。
+# https://rdrr.io/cran/egcm/src/R/egcm.R
+# 始めにegcmで共和分検定を実行して表示される結果を確認します。
+
+# 共に1次の和分過程I(1)の説明変数(x)および目的変数(y)を作成します。
+samplesize <- 200
+set.seed(20201024)
+x <- cumsum(rnorm(samplesize))
+y <- cumsum(rnorm(samplesize))
+
+# チャートで確認します。
+data.frame(i = seq(200),x,y) %>% gather(data = .,key = 'key',value = 'value',colnames(.)[-1]) %>% ggplot(mapping = aes(x = i,y = value,color = key)) + geom_line(size = 1) + theme_minimal() + theme(legend.text = element_text(size = 30),legend.key = element_blank(),legend.title = element_blank(),legend.position = 'top')
+# オレンジが説明変数x、青が目的変数yです。
+
+# 関数egcmを実行します。
+# include.constをTRUEとしてy~xの回帰に定数項を付けます。
+cat('\014')
+result_egcm <- egcm(X = x,Y = y,debias = F,include.const = T,i1test = 'adf',urtest = 'adf',p.value = 0.05)
+result_egcm %>% summary()
+# i1test『'arg' should be one of “pp”, “adf”, “bvr”, “pgff”』
+# urtest『'arg' should be one of “pp”, “adfraw”, “adf”, “jo-e”, “jo-t”, “ers-p”, “ers-d”, “sp-r”, “hurst”, “bvr”, “pgff”』
+
+# 『X and Y do not appear to be cointegrated.』XとYは共和分関係にない。と返ります。
+
+# 今回は結果に表示されています、
+data.frame(`xの係数`=result_egcm$beta,`定数項`=result_egcm$alpha,`残差の最終要素`=result_egcm$residuals %>% tail(1),`検定統計量`=result_egcm$r.stat[1,1]) %>% kable(row.names = F) %>% kable_styling(font_size = 30)
+# の算出手順を確認します。
+
+# 始めにxとyの線形回帰を定数項有りで取ります。
+result_lm <- lm(y ~ x)
+result_lm %>% summary()
+# Xの係数と定数項が一致します。
+
+# 続いて、
+resi <- result_lm$residuals
+resi %>% tail(1)
+# 残差の最後の要素が一致します。
+
+# 以下はADF単位根検定のための関数です。
+cat('\014')
+fun_test_statistic_of_adf <- function(y,p,drift=T,trend=T,without_ylag1_term=F){
+  # 原系列
+  df0 <- y %>% data.frame()
+  colnames(df0) <- 'y_t'
+  #トレンド項追加
+  df1 <- df0 %>% add_column(t = seq(nrow(df0)),.before = 1)
+  # ラグ1項追加
+  df1$`y_{t-1}` <- head(df1$y_t,-1) %>% c(NA,.)
+  # 一階差分系列の作成
+  diff <- df1$y_t %>% diff(lag = 1,differences = 1)
+  # 系列相関の影響を除去するための項を追加
+  df2 <- cbind(df1, embed(diff,p+1) %>% rbind(matrix(nrow = p+1,ncol = p+1),.))
+  # 差分系列の列名設定
+  # 4列目は目的変数
+  colnames(df2)[4:(4+p)] <- {if(0<p){c(0,seq(p))}else{0}} %>% paste0('Δy_{t-',.,'}')
+  # NA行削除
+  df <- df2 %>% na.omit()
+  # 説明変数とする列を設定
+  col_explanatory_variable <- NULL
+  col_explanatory_variable <- if(0<p){5:ncol(df)}
+  if(!without_ylag1_term)col_explanatory_variable <- c(3,col_explanatory_variable)
+  if(trend)col_explanatory_variable <- c(1,col_explanatory_variable)
+  # 線形回帰
+  adf_model <- result_lm <- NULL
+  if(!is.null(col_explanatory_variable)){
+    adf_model <- paste0('`',df[,4,drop=F] %>% colnames(),'`~',  df[,col_explanatory_variable,drop=F] %>% colnames() %>% paste0('`',.,'`',collapse = '+'),ifelse(drift,'+1','+0')) %>% eval()
+    result_lm <- lm(formula = adf_model,df)
+  }
+  return(list(df1=df1,df2=df2,df=df,adf_model=adf_model,result_lm=result_lm,col_explanatory_variable=col_explanatory_variable))
+}
+
+# ラグ次数は関数adf.testのデフォルト次数である、
+p <- trunc((samplesize-1)^(1/3))
+p
+# とします。
+
+# なおegcmの結果に表示されるADF検定の検定統計量は引数urtestをadfrawに指定してもur.dfのnoneモデル(trend項なし、drift項なし)の場合の結果が表示されるようです。
+result_adf <- fun_test_statistic_of_adf(y = resi,p = p,drift = F,trend = F)
+
+# 検定モデル
+result_adf$adf_model
+# trend項なし、drift項なし
+
+# 残差の単位根検定の結果です。
+result_adf_summary <- result_adf$result_lm %>% summary()
+result_adf_summary
+result_adf_summary$coefficients[1,3]
+# 検定統計量はegcmの結果と一致します。
+
+# なおegcmでは少なくともどちらか一方が定常過程I(0)の場合、WARNINGが出ます。
+# xを定常過程とします。
+x <- rnorm(n = samplesize)
+y <- rnorm(n = samplesize) %>% cumsum()
+cat('\014')
+egcm(X = x,Y = y,debias = F,include.const = T,i1test = 'adf',urtest = 'adf',p.value = 0.05) %>% summary()
+# 『X does not seem to be integrated.』Xが和分過程ではないようである。
+
+# xとyを定常過程とします。
+x <- rnorm(n = samplesize)
+y <- rnorm(n = samplesize)
+cat('\014')
+egcm(X = x,Y = y,debias = F,include.const = T,i1test = 'adf',urtest = 'adf',p.value = 0.05) %>% summary()
+# XとYの両方に和分過程ではないようであるとのWARNINGが出ます。
+
+# 2次の和分過程の場合、
+x <- rnorm(n = samplesize) %>% cumsum()
+y <- rnorm(n = samplesize) %>% cumsum() %>% cumsum()
+adf.test(y)
+adf.test(diff(y))
+adf.test(diff(diff(y)))
+cat('\014')
+egcm(X = x,Y = y,debias = F,include.const = T,i1test = 'adf',urtest = 'adf',p.value = 0.05) %>% summary()
+# I(2)が混在しても特にWARNINGは表示されません。
+
+# 以上です。ご視聴ありがとうございました。
+```
