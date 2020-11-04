@@ -1,0 +1,176 @@
+```{r}
+# https://youtu.be/mdgFaYsaFyA
+
+# 今回はADF単位根検定における3つのphi検定統計量(phi3、phi2、phi1)を確認します。
+
+# 参考引用文献
+# Walter Enders(2014),『APPLIED ECONOMETRIC TIME SERIES(FOURTH EDITION)』,WILEY.
+# 村尾博(2019),『Rで学ぶVAR実証分析』,オーム社.
+```
+
+```{r}
+# 必要なパッケージを読み込みます。
+graphics.off();cat('\014')
+pkgs <- c('dplyr','tibble','CADFtest')
+lapply(X = pkgs,require,character.only = T)
+sapply(X = pkgs,packageVersion)
+version$version.string
+rstudioapi::versionInfo()$version
+Sys.Date()
+```
+
+```{r}
+# 始めに検定統計量phi3を確認します。
+```
+
+$$
+\Delta y_t=\beta_1+\beta_2t+(\rho-1) y_{t-1}+ \sum_{i=1}^{p-1}\gamma_i \Delta y_{t-i} + u_t\\
+モデル:\rm{trend},検定統計量:\phi_3,\rm{H_0}:\rho -1=\beta_2=0\\
+*以降、\phi_2,\phi_1も同様\\
+複数係数の仮説検定となりますのでF検定を利用します。\\
+分散比=\frac{[\rm{SSR(restricted)}-\rm{SSR(restricted)}]/r}{\rm{SSR(restricted)}/(T-k)}\\
+r:帰無仮説の制約条件数,T:サンプルサイズ\\k:パラメータ数(制約無しの場合の)
+$$
+```{r}
+# 検定統計量を算出する関数です。
+fun_test_statistic_of_adf <- function(y,p,drift = T,trend = T,without_ylag1_term = F){
+  library(dplyr)
+  library(tibble)
+  # 原系列
+  df0 <- y %>% data.frame()
+  colnames(df0) <- 'y_t'
+  #トレンド項追加
+  df1 <- df0 %>% add_column(t = seq(nrow(df0)),.before = 1)
+  # ラグ1項追加
+  df1$`y_{t-1}` <- head(df1$y_t,-1) %>% c(NA,.)
+  # 一階差分系列の作成
+  diff <- df1$y_t %>% diff(lag = 1,differences = 1)
+  # 系列相関の影響を除去するための項を追加
+  df2 <- cbind(df1, embed(diff,p+1) %>% rbind(matrix(nrow = p+1,ncol = p+1),.))
+  # 差分系列の列名設定
+  # 4列目は目的変数
+  colnames(df2)[4:(4+p)] <- {if(0<p){c(0,seq(p))}else{0}} %>% paste0('Δy_{t-',.,'}')
+  colnames(df2) <- colnames(df2) %>% gsub('\\{t-0\\}','t',.)
+  # NA行削除
+  df <- df2 %>% na.omit()
+  # 説明変数とする列を設定
+  col_explanatory_variable <- NULL
+  col_explanatory_variable <- if(0<p){5:ncol(df)}
+  if(!without_ylag1_term)col_explanatory_variable <- c(3,col_explanatory_variable)
+  if(trend)col_explanatory_variable <- c(1,col_explanatory_variable)
+  # 線形回帰
+  adf_model <- paste0('`',df[,4,drop=F] %>% colnames(),'` ~ ',  df[,col_explanatory_variable,drop=F] %>% colnames() %>% paste0('`',.,'`',collapse = '+'),ifelse(drift,'+ 1','+ 0')) %>% gsub('``','',.) %>% eval()
+  result_lm <- lm(formula = adf_model,df)
+  return(list(df1=df1,df2=df2,df=df,adf_model=adf_model,result_lm=result_lm,col_explanatory_variable=col_explanatory_variable))
+}
+```
+
+```{r}
+# 共通のサンプル時系列データを作成します。
+set.seed(2020110301)
+samplesize <- 500
+y <- rnorm(n = samplesize) %>% cumsum();plot(y,type='o')
+```
+
+```{r}
+# 検定統計量phi3(分散比F)を求めます。
+p <- 0
+drift <- T
+k <- 3
+trend <- T
+without_ylag1_term <- F
+# 帰無仮説の制約条件なし
+unrestricted <- fun_test_statistic_of_adf(y = y,p = p,drift = drift,trend = trend,without_ylag1_term = without_ylag1_term)
+unrestricted$adf_model
+unrest_resi <- unrestricted$result_lm$residuals;plot(unrest_resi,type='o')
+ssr_unrestricted <- sum(unrest_resi^2)
+# 帰無仮説の制約条件あり
+trend <- F
+without_ylag1_term <- T
+restricted <- fun_test_statistic_of_adf(y = y,p = p,drift = drift,trend = trend,without_ylag1_term = without_ylag1_term)
+restricted$adf_model
+rest_resi <- restricted$result_lm$residuals;plot(rest_resi,type='o')
+ssr_restricted <- sum(rest_resi^2)
+# 分散比
+r <- 2
+Fvalue <- ((ssr_restricted - ssr_unrestricted)/r)/(ssr_unrestricted/(length(unrest_resi)-k))
+Fvalue
+
+# Rのur.df {urca}の結果と照合します。
+ur.df(y = y,type = 'trend',lags = p) %>% summary() %>% .@teststat
+# phi3の結果は一致します。
+
+# 続いて検定統計量phi2を求めます。
+```
+
+$$
+\Delta y_t=\beta_1+\beta_2t+(\rho-1) y_{t-1}+ \sum_{i=1}^{p-1}\gamma_i \Delta y_{t-i} + u_t\\
+モデル:\rm{trend},検定統計量:\phi_2,\rm{H_0}:\rho -1=\beta_1= \beta_2=0\\
+$$
+```{r}
+p <- 0
+drift <- T
+k <- 3
+trend <- T
+without_ylag1_term <- F
+# 帰無仮説の制約条件なし
+unrestricted <- fun_test_statistic_of_adf(y = y,p = p,drift = drift,trend = trend,without_ylag1_term = without_ylag1_term)
+unrestricted$adf_model
+unrest_resi <- unrestricted$result_lm$residuals;plot(unrest_resi,type='o')
+ssr_unrestricted <- sum(unrest_resi^2)
+# 帰無仮説の制約条件あり
+trend <- F
+without_ylag1_term <- T
+restricted <- fun_test_statistic_of_adf(y = y,p = p,drift = drift,trend = trend,without_ylag1_term = without_ylag1_term)
+restricted$adf_model
+rest_resi <- restricted$result_lm$residuals;plot(rest_resi,type='o')
+ssr_restricted <- sum(rest_resi^2)
+# 分散比
+r <- 3 # phi3との違いは制約条件数です。
+Fvalue <- ((ssr_restricted - ssr_unrestricted)/r)/(ssr_unrestricted/(length(unrest_resi)-k))
+Fvalue
+
+# Rのur.df {urca}の結果と照合します。
+ur.df(y = y,type = 'trend',lags = p) %>% summary() %>% .@teststat
+# phi2の結果は一致します。
+
+# 最後は検定統計量phi1です。
+```
+
+$$
+\Delta y_t=\beta_1+(\rho-1) y_{t-1}+ \sum_{i=1}^{p-1}\gamma_i \Delta y_{t-i} + u_t\\
+モデル:\rm{drift},検定統計量:\phi_1,\rm{H_0}:\rho -1=\beta_1=0\\
+$$
+```{r}
+p <- 0
+drift <- T
+k <- 2
+trend <- F
+without_ylag1_term <- F
+# 帰無仮説の制約条件なし
+unrestricted <- fun_test_statistic_of_adf(y = y,p = p,drift = drift,trend = trend,without_ylag1_term = without_ylag1_term)
+unrestricted$adf_model
+unrest_resi <- unrestricted$result_lm$residuals;plot(unrest_resi,type='o')
+ssr_unrestricted <- sum(unrest_resi^2)
+# 帰無仮説の制約条件あり
+drift <- F
+without_ylag1_term <- T
+restricted <- fun_test_statistic_of_adf(y = y,p = p,drift = drift,trend = trend,without_ylag1_term = without_ylag1_term)
+restricted$adf_model
+rest_resi <- restricted$result_lm$residuals;plot(rest_resi,type='o')
+ssr_restricted <- sum(rest_resi^2)
+# 分散比
+r <- 2
+Fvalue <- ((ssr_restricted - ssr_unrestricted)/r)/(ssr_unrestricted/(length(unrest_resi)-k))
+Fvalue
+
+# Rのur.df {urca}の結果と照合します。
+ur.df(y = y,type = 'drift',lags = p) %>% summary() %>% .@teststat
+# phi1の結果は一致します。
+
+# ここまでADF単位根検定におけるtau検定統計量およびphi検定統計量を確認してきました。
+
+# ランダムウォークであるのか否か、非定常であるのか否か。始めの一歩としてこれだけの検定を通さなければならない 時系列分析は「触れるな危険。一見さんお断り」の世界であるようです。
+
+# 以上です。ご視聴ありがとうございました。
+```
